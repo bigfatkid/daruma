@@ -1240,7 +1240,7 @@ function renderPickSheet() {
     <div class="card">${extras.map((x) => row(x, 'einmalig')).join('')}${opts.map((o) => row(o.n, agoText(ago[o.n]))).join('')}</div>
     <div style="margin-top:10px">${other}</div>
     ${wk}
-    <button class="btn-primary" style="width:100%;margin-top:16px" data-action="pick-save" ${n || had || (dr.other || '').trim() ? '' : 'disabled'}>${multi && n ? `Speichern · ${n} gewählt` : 'Speichern'}</button>
+    <button class="btn-primary" style="width:100%;margin-top:16px" data-action="pick-save" ${n || had || dr.otherOpen ? '' : 'disabled'}>${multi && n ? `Speichern · ${n} gewählt` : 'Speichern'}</button>
     ${had ? '<button class="btn-plain" style="width:100%;margin-top:8px;color:#ff3b30" data-action="pick-clear">Zurücksetzen</button>' : ''}`;
   return sheetShell(h.name, cancelBtn, '', body);
 }
