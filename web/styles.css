@@ -16,25 +16,10 @@
   --radius: 18px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  color-scheme: light dark;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #141210;
-    --card: #1f1c19;
-    --text: #f3ece1;
-    --secondary: #9a8f82;
-    --separator: rgba(255, 240, 220, 0.09);
-    --fill: rgba(255, 240, 220, 0.09);
-    --accent: #e0503f;
-    --accent-soft: rgba(224, 80, 63, 0.2);
-    --stamp-done: #3a2c26;
-    --card-line: rgba(255, 240, 220, 0.06);
-    --tabbar: rgba(20, 18, 16, 0.92);
-    --sheet-dim: rgba(0, 0, 0, 0.55);
-  }
-}
+
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
@@ -379,7 +364,6 @@ button:disabled { cursor: default; }
   border-radius: 7px;
 }
 .segmented button.on { background: var(--card); box-shadow: 0 1px 4px rgba(0,0,0,.15); font-weight: 600; }
-@media (prefers-color-scheme: dark) { .segmented button.on { background: #636366; } }
 
 .weekdays { display: flex; gap: 6px; padding: 10px; }
 .weekdays button {
