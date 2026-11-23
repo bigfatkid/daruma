@@ -494,7 +494,7 @@ function renderOnboarding() {
   if (ob.step === 0) {
     body = `<div class="ob-hero"><div class="daruma big-daruma wobble" data-action="poke">${darumaSVG(false)}</div>
       <h1>Kleine Schritte, jeden Tag.</h1>
-      <p>Daruma hilft dir, Habits, To-Dos und Projekte im Blick zu behalten. Schaffst du alle Habits eines Tages, bekommt Daruma sein zweites Auge.</p></div>
+      <p>Daruma hilft dir, Habits, To-Dos und Projekte im Blick zu behalten. Schaffst du alle Habits und To-Dos eines Tages, bekommt Daruma sein zweites Auge.</p></div>
       <h3 class="section-title">Wie heißt du?</h3>
       <input class="field" id="ob-name" value="${esc(ob.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name" enterkeyhint="next">
       <p class="ob-restore"><label>Daten wiederherstellen<input type="file" accept="application/json,.json" data-action="import" hidden></label></p>`;
@@ -530,7 +530,7 @@ function renderOnboarding() {
   } else {
     body = `<div class="ob-hero ob-done"><div class="daruma done-daruma wobble" data-action="poke">${darumaSVG(true, true)}</div>
       <h1>Alles bereit${ob.name ? `, ${esc(ob.name)}` : ''}!</h1>
-      <p>Schaffst du an einem Tag alle Habits, bekommt Daruma sein zweites Auge. Gleich zeige ich dir kurz die App.</p></div>`;
+      <p>Schaffst du an einem Tag alle Habits und To-Dos, bekommt Daruma sein zweites Auge. Gleich zeige ich dir kurz die App.</p></div>`;
     button = 'Los geht’s';
   }
   return `<main class="screen ob">
