@@ -699,8 +699,7 @@ function habitRow(h, d, future) {
   if (h.kind === 'check') {
     controls = `<button class="status-btn" data-action="toggle-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Abhaken'}">${statusCircle(done ? 'done' : 'open')}</button>`;
   } else if (h.kind === 'count') {
-    controls = `<span class="value">${num(v)}/${num(h.target)} ${esc(h.unit)}</span>
-      <button class="step" data-action="step" data-id="${h.id}" data-dir="-1" ${v <= 0 || future ? 'disabled' : ''} aria-label="Weniger">−</button>
+    controls = `<button class="step" data-action="step" data-id="${h.id}" data-dir="-1" ${v <= 0 || future ? 'disabled' : ''} aria-label="Weniger">−</button>
       <button class="step" data-action="step" data-id="${h.id}" data-dir="1" ${dis} aria-label="Mehr">+</button>
       <button class="status-btn" data-action="fill-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Ganz erledigt'}">${statusCircle(done ? 'done' : 'open', v / h.target)}</button>`;
   } else {
@@ -710,10 +709,14 @@ function habitRow(h, d, future) {
         : `<span class="accent-text">Eintragen</span>${statusCircle('open')}`}
     </button>`;
   }
-  const label = isWeekly(h)
-    ? `<span class="name-wrap"><span class="name">${esc(h.name)}</span><span class="tag">${weekCount(h, d)}/${h.perWeek} diese Woche</span></span>`
+  const sub = [
+    h.kind === 'count' ? `${num(v)}/${num(h.target)} ${esc(h.unit)}` : h.kind === 'limit' && getValue(h, d) === undefined ? `max. ${num(h.target)} ${esc(h.unit)}` : '',
+    isWeekly(h) ? `${weekCount(h, d)}/${h.perWeek} diese Woche` : '',
+  ].filter(Boolean).join(' · ');
+  const label = sub
+    ? `<span class="name-wrap"><span class="name">${esc(h.name)}</span><span class="tag">${sub}</span></span>`
     : `<span class="name">${esc(h.name)}</span>`;
-  return `<div class="row">
+  return `<div class="row hab-row ${done ? 'is-done' : ''}">
     ${h.kind !== 'limit' && !future
       ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${pic(h.icon)}</span>${label}</button>`
       : `<div class="row-main"><span class="emoji">${pic(h.icon)}</span>${label}</div>`}
@@ -777,7 +780,7 @@ function todoRow(t, today, future) {
       <span class="emoji">${pic(list ? list.icon : '📌')}</span>
       <span class="name-wrap"><span class="name ${done ? 'struck' : ''}">${esc(t.title)}</span>${tag && !done ? `<span class="tag">${esc(tag)}</span>` : ''}</span>
     </button>
-    <div class="controls"><button class="status-btn" data-action="toggle-todo" data-id="${t.id}" ${future ? 'disabled' : ''} aria-label="${done ? 'Zurücksetzen' : 'Erledigt'}">${statusCircle(done ? 'done' : 'open')}</button></div>
+    <div class="controls"><button class="status-btn" data-action="toggle-todo" data-id="${t.id}" ${future ? 'disabled' : ''} aria-label="${done ? 'Zurücksetzen' : 'Erledigt'}"><span class="todo-box ${done ? 'on' : ''}">${done ? '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>' : ''}</span></button></div>
   `);
 }
 

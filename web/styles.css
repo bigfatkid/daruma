@@ -1,17 +1,19 @@
 :root {
-  --bg: #f2f2f7;
-  --card: #ffffff;
-  --text: #000000;
-  --secondary: #8a8a8e;
-  --separator: rgba(60, 60, 67, 0.16);
-  --fill: rgba(120, 120, 128, 0.12);
-  --accent: #d1332e;
-  --accent-soft: rgba(209, 51, 46, 0.14);
+  --bg: #f4ede1;
+  --card: #fffaf2;
+  --text: #2b2520;
+  --secondary: #8f8375;
+  --separator: rgba(90, 70, 50, 0.14);
+  --fill: rgba(120, 95, 70, 0.1);
+  --accent: #c0392b;
+  --accent-soft: rgba(192, 57, 43, 0.12);
+  --stamp-done: #eadfce;
+  --card-line: rgba(90, 70, 50, 0.10);
   --orange: #ff9500;
   --gold: #f2bd40;
-  --tabbar: rgba(249, 249, 249, 0.88);
+  --tabbar: rgba(244, 237, 225, 0.92);
   --sheet-dim: rgba(0, 0, 0, 0.35);
-  --radius: 14px;
+  --radius: 18px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   color-scheme: light dark;
@@ -19,15 +21,17 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #000000;
-    --card: #1c1c1e;
-    --text: #ffffff;
-    --secondary: #8d8d93;
-    --separator: rgba(84, 84, 88, 0.6);
-    --fill: rgba(120, 120, 128, 0.28);
-    --accent: #ff4d45;
-    --accent-soft: rgba(255, 77, 69, 0.2);
-    --tabbar: rgba(22, 22, 24, 0.9);
+    --bg: #141210;
+    --card: #1f1c19;
+    --text: #f3ece1;
+    --secondary: #9a8f82;
+    --separator: rgba(255, 240, 220, 0.09);
+    --fill: rgba(255, 240, 220, 0.09);
+    --accent: #e0503f;
+    --accent-soft: rgba(224, 80, 63, 0.2);
+    --stamp-done: #3a2c26;
+    --card-line: rgba(255, 240, 220, 0.06);
+    --tabbar: rgba(20, 18, 16, 0.92);
     --sheet-dim: rgba(0, 0, 0, 0.55);
   }
 }
@@ -587,3 +591,26 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .fold-chev { width: 16px; height: 16px; margin-left: auto; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
 .fold-sum + .fold-chev { margin-left: 0; }
 .fold.closed .fold-chev { transform: rotate(-90deg); }
+
+/* ---------- Washi-Stil (v37) ---------- */
+.large-title, .hero-count, .ob h1, .ob h2, .sheet-head h2, .section-title.fold > span:first-child {
+  font-family: ui-serif, "New York", Georgia, serif;
+}
+.large-title { font-weight: 600; letter-spacing: 0.2px; }
+.hero-count { font-weight: 600; }
+.card { border: 1px solid var(--card-line); }
+.section-title.fold { text-transform: none; color: var(--text); font-size: 21px; font-weight: 600; letter-spacing: 0; margin: 24px 20px 8px; width: calc(100% - 40px); align-items: baseline; }
+.section-title.fold .fold-sum { font-family: inherit; font-weight: 400; color: var(--secondary); font-size: 14px; }
+.section-title.fold .fold-chev { color: var(--secondary); align-self: center; }
+.section-title:not(.fold) { letter-spacing: 1.2px; font-size: 12px; }
+/* Habits auf Heute: Icons als rote Stempel */
+.hab-row { min-height: 60px; }
+.hab-row .emoji { width: 38px; height: 38px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; }
+.hab-row .emoji .picto { color: #fff; width: 20px; height: 20px; }
+.hab-row.is-done .emoji { background: var(--stamp-done); }
+.hab-row.is-done .emoji .picto { color: var(--accent); }
+.hab-row + .hab-row::before { left: 64px; }
+/* To-Dos: eckige Kästchen */
+.todo-box { width: 24px; height: 24px; border: 2px solid var(--secondary); border-radius: 7px; display: flex; align-items: center; justify-content: center; opacity: .7; }
+.todo-box.on { background: var(--accent); border-color: var(--accent); opacity: 1; }
+.todo-box svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
