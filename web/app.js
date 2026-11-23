@@ -502,8 +502,7 @@ function renderOnboarding() {
   } else if (ob.step === 1) {
     body = `<h1 class="large-title">Deine Habits</h1>
       <p class="ob-lead">Hier ist eine Vorauswahl beliebter Habits für den Start. Wähle aus, was zu dir passt, lieber erst mal wenige. Im nächsten Schritt legst du Ziel und Häufigkeit fest.</p>
-      ${CATALOG.map((c) => `<h3 class="section-title">${esc(c.name)}</h3><div class="card">${c.items.map((t) => `<div class="row"><button class="row-main" data-action="ob-habit" data-name="${esc(t.name)}">
-          <span class="emoji">${pic(t.icon)}</span><span class="name" style="flex:1">${esc(t.name)}</span>${pick(ob.habits.includes(t.name))}</button></div>`).join('')}</div>`).join('')}
+      ${CATALOG.map((c) => `<h3 class="section-title">${esc(c.name)}</h3><div class="ob-chips">${c.items.map((t) => { const on = ob.habits.includes(t.name); return `<button class="ob-chip ${on ? 'on' : ''}" data-action="ob-habit" data-name="${esc(t.name)}" aria-pressed="${on}">${on ? '<svg class="picto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>' : pic(t.icon)}<span>${esc(t.name)}</span></button>`; }).join('')}</div>`).join('')}
       <p class="section-footer">Nicht dabei, was du suchst? Eigene Habits legst du nach der Einrichtung im Reiter Routinen an.</p>`;
     button = ob.habits.length ? `Weiter mit ${ob.habits.length} Habit${ob.habits.length === 1 ? '' : 's'}` : 'Ohne Habits weiter';
   } else if (ob.step === 2) {
