@@ -97,44 +97,89 @@ function freshState() {
   return { version: 1, name: '', setupDone: false, catchUpV2: true, habits: [], logs: {}, todos: [], lists: [], ...moduleDefaults() };
 }
 const moduleDefaults = () => ({ stepV2: true, checkinV2: true, checkinQuestions: [], checkins: {}, picks: {} });
+// Sicherungen und alte Daten prüfen: fehlende Felder ergänzen, Unbrauchbares aussortieren
+const idOk = (x) => typeof x === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(x);
+const dayOk = (x) => typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x);
+const isObj = (x) => x && typeof x === 'object' && !Array.isArray(x);
+const KINDS = ['check', 'count', 'limit', 'choice'];
+function cleanHabit(h, i) {
+  if (!isObj(h)) return null;
+  const n = (v, d) => (typeof v === 'number' && isFinite(v) && v > 0 ? v : d);
+  return {
+    ...h,
+    id: idOk(h.id) ? h.id : uid(),
+    name: typeof h.name === 'string' && h.name.trim() ? h.name : 'Habit',
+    icon: typeof h.icon === 'string' ? h.icon : '✅',
+    kind: KINDS.includes(h.kind) ? h.kind : 'check',
+    target: n(h.target, 1), step: n(h.step, 1), unit: typeof h.unit === 'string' ? h.unit : '',
+    weekdays: Array.isArray(h.weekdays) && h.weekdays.length ? h.weekdays.filter((x) => Number.isInteger(x) && x >= 0 && x <= 6) : [0, 1, 2, 3, 4, 5, 6],
+    createdAt: dayOk(h.createdAt) ? h.createdAt : todayKey(),
+    perWeek: Number.isInteger(h.perWeek) && h.perWeek > 0 ? h.perWeek : 0,
+    order: typeof h.order === 'number' ? h.order : i,
+    options: Array.isArray(h.options) ? h.options.filter((o) => typeof o === 'string' && o.trim()) : [],
+    hist: Array.isArray(h.hist) ? h.hist.filter((e) => isObj(e) && dayOk(e.until)) : [],
+  };
+}
+function cleanTodo(t, i) {
+  if (!isObj(t) || typeof t.title !== 'string') return null;
+  return { ...t, id: idOk(t.id) ? t.id : uid(), plannedDay: dayOk(t.plannedDay) ? t.plannedDay : null,
+    completedAt: dayOk(t.completedAt) ? t.completedAt : null, listId: idOk(t.listId) ? t.listId : null,
+    order: typeof t.order === 'number' ? t.order : i, subs: Array.isArray(t.subs) ? t.subs.filter((x) => isObj(x) && typeof x.title === 'string').map((x) => ({ ...x, id: idOk(x.id) ? x.id : uid() })) : [] };
+}
 function normalize(s) {
+  if (!isObj(s)) throw new Error('kein Daruma-Stand');
   // Einmalig: Standard für "Habits nachholen" ist jetzt aus. Kurz zuvor gesetzte Werte zurücksetzen.
-  if (!s.catchUpV2 && Array.isArray(s.habits)) s.habits.forEach((h) => { delete h.catchUp; });
+  if (!s.catchUpV2 && Array.isArray(s.habits)) s.habits.forEach((h) => { if (isObj(h)) delete h.catchUp; });
   // Einmalig: Wasser und Schlaf zählen pro Tipp um 1 (Mattis Wunsch).
-  if (!s.stepV2 && Array.isArray(s.habits)) s.habits.forEach((h) => { if ((h.name === 'Wasser trinken' || h.name === 'Schlafdauer') && h.step === 0.5) h.step = 1; });
+  if (!s.stepV2 && Array.isArray(s.habits)) s.habits.forEach((h) => { if (isObj(h) && (h.name === 'Wasser trinken' || h.name === 'Schlafdauer') && h.step === 0.5) h.step = 1; });
   return {
     version: 1,
     name: typeof s.name === 'string' ? s.name : '',
     setupDone: s.setupDone !== false, // bestehende Daten (ohne Feld) gelten als eingerichtet
     tourDone: !!s.tourDone,
     catchUpV2: true,
-    habits: Array.isArray(s.habits) ? s.habits : [],
+    habits: Array.isArray(s.habits) ? s.habits.map(cleanHabit).filter(Boolean) : [],
     logs: s.logs && typeof s.logs === 'object' ? s.logs : {},
-    todos: Array.isArray(s.todos) ? s.todos : [],
-    lists: Array.isArray(s.lists) ? s.lists : [],
+    todos: Array.isArray(s.todos) ? s.todos.map(cleanTodo).filter(Boolean) : [],
+    lists: Array.isArray(s.lists) ? s.lists.filter((l) => isObj(l) && idOk(l.id)).map((l) => ({ ...l, name: typeof l.name === 'string' ? l.name : 'Projekt', icon: typeof l.icon === 'string' ? l.icon : '📦' })) : [],
     checkinV2: true,
     stepV2: true,
     // Check-in erscheint, sobald Fragen gewählt sind. Aus der kurzen Modul-Version nur übernehmen, wenn der Check-in an war.
-    checkinQuestions: Array.isArray(s.checkinQuestions) && (s.checkinV2 || (Array.isArray(s.modules) && s.modules.some((m) => m.id === 'checkin' && m.on))) ? s.checkinQuestions.filter((q) => q.type === 'scale') : [],
+    checkinQuestions: Array.isArray(s.checkinQuestions) && (s.checkinV2 || (Array.isArray(s.modules) && s.modules.some((m) => m.id === 'checkin' && m.on))) ? s.checkinQuestions.filter((q) => isObj(q) && q.type === 'scale' && idOk(q.id) && typeof q.text === 'string') : [],
     checkins: s.checkins && typeof s.checkins === 'object' ? s.checkins : {},
     collapsed: s.collapsed && typeof s.collapsed === 'object' ? s.collapsed : {},
     habitMode: s.habitMode === 'steps' ? 'steps' : 'whole',
     picks: s.picks && typeof s.picks === 'object' ? s.picks : {}, // Auswahl-Habits: was an dem Tag gewählt wurde
+    lastBackup: dayOk(s.lastBackup) ? s.lastBackup : null,
+    firstUse: dayOk(s.firstUse) ? s.firstUse : todayKey(),
+    backupSnooze: dayOk(s.backupSnooze) ? s.backupSnooze : null,
   };
 }
+let loadProblem = false;
 function load() {
   if (DEMO) return demoState(DEMO);
+  let raw = null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return normalize(JSON.parse(raw));
-  } catch (e) { console.warn('Laden fehlgeschlagen', e); }
+  } catch (e) {
+    // Nie stillschweigend überschreiben: kaputten Stand als Kopie aufheben (Review: Datenverlust)
+    console.warn('Laden fehlgeschlagen', e);
+    try { if (raw) localStorage.setItem(STORAGE_KEY + '.defekt', raw); } catch (e2) { /* egal */ }
+    loadProblem = true;
+  }
   const s = freshState();
-  persist(s);
+  if (!loadProblem) persist(s);
   return s;
 }
+let persistWarned = false;
 function persist(s = state) {
   if (DEMO) return;
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); } catch (e) { console.warn('Speichern fehlgeschlagen', e); }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+  catch (e) {
+    console.warn('Speichern fehlgeschlagen', e);
+    if (!persistWarned) { persistWarned = true; setTimeout(() => toast('Speichern hat nicht geklappt. Bitte lade eine Sicherung herunter (Fortschritt → Zahnrad).'), 0); }
+  }
 }
 
 let state = load();
@@ -152,12 +197,19 @@ function weekCount(h, d) {
   for (let i = 0; i < 7; i++) { const k = addDays(start, i); if (k >= h.createdAt && isDone(h, k)) n++; }
   return n;
 }
+// Regel, die an Tag d galt: ändert man Art oder Ziel, bleiben vergangene Tage, wie sie waren (Review QA)
+function ruleAt(h, d) {
+  for (const e of h.hist || []) if (d < e.until) return e;
+  return h;
+}
+const LIMIT_OVER = -1; // Limit überschritten (Modus „ganz oder gar nicht“)
 function isDone(h, d) {
-  const v = getValue(h, d);
-  if (h.kind === 'check') return (v ?? 0) >= 1;
-  if (h.kind === 'choice') return (v ?? 0) >= 1; // abgehakt wird wie bei Ja/Nein, die Auswahl ist nur die Notiz dazu
-  if (h.kind === 'count') return (v ?? 0) >= h.target;
-  return v !== undefined && v <= h.target;
+  const v = getValue(h, d), r = ruleAt(h, d);
+  if (r.kind === 'check' || r.kind === 'choice') return (v ?? 0) >= 1; // Auswahl: abgehakt wie Ja/Nein
+  if (r.kind === 'count') return (v ?? 0) >= r.target;
+  // Limit gilt als eingehalten, bis man „überschritten“ tippt (Review: Tag wird sonst nie fertig)
+  if (v === undefined) return d <= todayKey();
+  return v >= 0 && v <= r.target;
 }
 function setValue(h, d, v) {
   const k = logKey(h, d);
@@ -183,7 +235,7 @@ function lastPicked(h, d) {
   const last = {};
   for (const [k, names] of Object.entries(state.picks || {})) {
     const [id, day] = k.split('|');
-    if (id !== h.id || day >= d) continue;
+    if (id !== h.id || day >= d || !isDone(h, day)) continue;
     names.forEach((n) => { if (!last[n] || day > last[n]) last[n] = day; });
   }
   const ago = {};
@@ -195,7 +247,7 @@ function pickStats(h, days) {
   const from = addDays(todayKey(), -(days - 1)), count = {};
   for (const [k, names] of Object.entries(state.picks || {})) {
     const [id, day] = k.split('|');
-    if (id === h.id && day >= from) names.forEach((n) => { count[n] = (count[n] || 0) + 1; });
+    if (id === h.id && day >= from && isDone(h, day)) names.forEach((n) => { count[n] = (count[n] || 0) + 1; });
   }
   return Object.entries(count).sort((a, b) => b[1] - a[1]);
 }
@@ -213,7 +265,7 @@ function weekStreak(h) {
   let w = weekStart(today);
   if (weekCount(h, w) < h.perWeek) w = addDays(w, -7); // laufende Woche zählt erst, wenn geschafft
   let n = 0;
-  for (let i = 0; i < 60 && addDays(w, 6) >= h.createdAt; i++, w = addDays(w, -7)) {
+  for (let i = 0; i < 500 && addDays(w, 6) >= h.createdAt; i++, w = addDays(w, -7)) {
     if (weekCount(h, w) >= h.perWeek) n++; else break;
   }
   return n;
@@ -223,10 +275,11 @@ function streak(h) {
   const today = todayKey();
   let d = today;
   if (isActive(h, d) && !isDone(h, d)) d = addDays(d, -1);
-  let n = 0;
-  for (let i = 0; i < 400 && d >= h.createdAt; i++, d = addDays(d, -1)) {
+  // Puffer: ein einzelner verpasster Tag bricht die Serie nicht, erst zwei hintereinander (Review Habit-Coach)
+  let n = 0, missed = false;
+  for (let i = 0; i < 3000 && d >= h.createdAt; i++, d = addDays(d, -1)) {
     if (!isActive(h, d)) continue;
-    if (isDone(h, d)) n++; else break;
+    if (isDone(h, d)) { n++; missed = false; } else if (missed || n === 0) break; else missed = true;
   }
   return n;
 }
@@ -317,7 +370,7 @@ function renderCheckinCard(d, today) {
     return `<div class="ci-q"><div class="ci-label"><span>${esc(q.text)}</span>${q.type === 'scale' ? `<span class="ci-val" data-val-for="${q.id}">${answered(v) ? v : '–'}/10</span>` : ''}</div>${input}</div>`;
   }).join('');
   if (ciFolded(d)) {
-    const n = Object.keys(checkinFor(d)).length;
+    const n = state.checkinQuestions.filter((q) => answered(checkinFor(d)[q.id])).length;
     return sectionHead('checkin', 'Check-in', true, n ? `${n} von ${state.checkinQuestions.length} beantwortet` : 'offen');
   }
   return `${sectionHead('checkin', 'Check-in', false)}<div class="card checkin-card">${qs}
@@ -449,7 +502,9 @@ function renderSettingsSheet() {
       <div class="row"><button class="row-main" data-action="export"><span class="emoji">${pic('💾')}</span><span class="name">Sicherung herunterladen</span></button></div>
       <div class="row"><label class="row-main" style="cursor:pointer"><span class="emoji">${pic('📂')}</span><span class="name">Sicherung laden</span><input type="file" accept="application/json,.json" data-action="import" hidden></label></div>
     </div>
-    <p class="section-footer">Alles bleibt nur auf diesem Gerät gespeichert. Eine Sicherung ab und zu schadet nicht.</p>
+    <p class="section-footer">Alles bleibt nur auf diesem Gerät gespeichert. Löschst du das Icon, sind die Daten weg. ${state.lastBackup ? `Zuletzt gesichert am ${fmt(state.lastBackup, { day: 'numeric', month: 'long' })}.` : 'Noch keine Sicherung.'}</p>
+    <h3 class="section-title">Erinnerung</h3>
+    <div class="card"><div class="row"><button class="row-main" data-action="open-reminder"><span class="emoji">${pic('🌙')}</span><span class="name">Tägliche Erinnerung einrichten</span></button></div></div>
     <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="tour-start"><span class="emoji">${pic('🧭')}</span><span class="name">App-Tour noch mal ansehen</span></button></div></div>`;
   return sheetShell('Einstellungen', '', '<button class="link" style="font-weight:600" data-action="close-sheet">Fertig</button>', body);
 }
@@ -535,7 +590,8 @@ function weekRing(progress, selected, future) {
 const app = document.getElementById('app');
 
 function render() {
-  if (!state.setupDone) { app.innerHTML = renderOnboarding(); return; }
+  const toastHtml = ui.toast ? `<div class="toast${ui.undo ? ' with-undo' : ''}">${esc(ui.toast)}${ui.undo ? '<button class="toast-undo" data-action="undo">Rückgängig</button>' : ''}</div>` : '';
+  if (!state.setupDone) { app.innerHTML = renderOnboarding() + toastHtml; return; }
   // Scroll-Position im offenen Fenster behalten (sonst springt es bei jeder Änderung nach oben)
   const oldBody = app.querySelector('.sheet-body');
   const keepScroll = oldBody && ui.sheet && ui.sheet === render.lastSheet ? oldBody.scrollTop : 0;
@@ -675,8 +731,10 @@ function renderToday() {
   // Für das zweite Auge zählen Habits und To-Dos des Tages (Mattis Wunsch).
   // Wochen-Habits blockieren das Auge nicht: sie zählen nur an Tagen, an denen sie erledigt wurden.
   const counted = habits.filter((h) => !isWeekly(h) || isDone(h, d));
-  const done = counted.filter((h) => isDone(h, d)).length + todos.filter((t) => t.completedAt).length;
-  const total = counted.length + todos.length;
+  // Übertragene To-Dos („seit …“) stehen in der Liste, blockieren das Auge aber nicht (Review, Matti)
+  const eyeTodos = todos.filter((t) => !(d === today && carriedOver(t, today)));
+  const done = counted.filter((h) => isDone(h, d)).length + eyeTodos.filter((t) => t.completedAt).length;
+  const total = counted.length + eyeTodos.length;
   const allDone = total > 0 && done === total;
 
   // Wackeln, wenn gerade alles erledigt wurde
@@ -712,6 +770,7 @@ function renderToday() {
       </div>
     </div>
 
+    ${renderBackupHint(d, today)}
     ${renderCheckinCard(d, today)}
 
     ${sectionHead('habits', 'Habits', habitsFolded(d, habits), counted.length ? `${counted.filter((h) => isDone(h, d)).length} von ${counted.length} erledigt` : '')}
@@ -740,7 +799,7 @@ function renderToday() {
 
 function dayProgress(k, today) {
   const active = state.habits.filter((h) => isActive(h, k) || (isWeekly(h) && h.createdAt <= k && isDone(h, k)));
-  const dayTodos = state.todos.filter((t) => todoAppears(t, k, today));
+  const dayTodos = state.todos.filter((t) => todoAppears(t, k, today) && !(k === today && carriedOver(t, today)));
   const n = active.length + dayTodos.length;
   const done = active.filter((h) => isDone(h, k)).length + dayTodos.filter((t) => t.completedAt).length;
   return n ? done / n : 0;
@@ -780,7 +839,7 @@ function habitRow(h, d, future) {
       : `<button class="status-btn" data-action="fill-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Erledigt'}">${statusCircle(done ? 'done' : 'open')}</button>`;
   } else if (!steps) {
     // Limit im Modus "ganz oder gar nicht": nur abhaken, dass das Limit eingehalten wurde
-    controls = `<button class="status-btn" data-action="toggle-limit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Limit eingehalten'}">${statusCircle(done ? 'done' : 'open')}</button>`;
+    controls = `<button class="status-btn" data-action="toggle-limit" data-id="${h.id}" ${dis} aria-label="${done ? 'Überschritten' : 'Doch eingehalten'}">${statusCircle(done ? 'done' : 'missed')}</button>`;
   } else {
     const has = getValue(h, d) !== undefined;
     controls = `<button class="limit-btn" data-action="limit-entry" data-id="${h.id}" ${dis}>
@@ -793,7 +852,7 @@ function habitRow(h, d, future) {
   const shown = picked.length ? picked.join(', ') : h.name;
   const sub = ([
     h.kind === 'choice' && !picked.length && h.multi && minPick(h) > 1 ? `mind. ${minPick(h)}` : '',
-    h.kind === 'count' ? (steps ? `${num(v)}/${num(h.target)} ${esc(h.unit)}` : `${num(h.target)} ${esc(h.unit)}`) : h.kind === 'limit' && (!steps || getValue(h, d) === undefined) ? `max. ${num(h.target)} ${esc(h.unit)}` : '',
+    h.kind === 'count' ? (steps ? `${num(v)}/${num(h.target)} ${esc(h.unit)}` : `${num(h.target)} ${esc(h.unit)}`) : h.kind === 'limit' && !done && !steps ? 'überschritten' : h.kind === 'limit' && (!steps || getValue(h, d) === undefined) ? `max. ${num(h.target)} ${esc(h.unit)}` : '',
   ].filter(Boolean).join(' · ') + (isWeekly(h) ? ` (${weekCount(h, d)}/${h.perWeek}${weekCount(h, d) >= h.perWeek ? ' ✓' : ''})` : '')).trim();
   const label = sub
     ? `<span class="name-wrap"><span class="name">${esc(shown)}</span><span class="tag">${sub}</span></span>`
@@ -862,7 +921,7 @@ function todoRow(t, today, future) {
   let tag = '';
   if (list) tag = `aus ${list.name}`;
   if (subsText(t)) tag = tag ? `${tag} · ${subsText(t)}` : subsText(t);
-  else if (carriedOver(t, today)) tag = `seit ${fmt(t.plannedDay, { weekday: 'long' })}`;
+  else if (carriedOver(t, today)) tag = `seit ${t.plannedDay < addDays(today, -6) ? fmt(t.plannedDay, { day: 'numeric', month: 'long' }) : fmt(t.plannedDay, { weekday: 'long' })}`;
   return swipeRow('todo', t.id, `
     <button class="row-main" data-action="edit-todo" data-id="${t.id}">
       <span class="emoji">${pic(list ? list.icon : '📌')}</span>
@@ -1097,6 +1156,29 @@ function renderSheet() {
   }
 
   if (s.type === 'pick') return renderPickSheet();
+  if (s.type === 'import-confirm') {
+    const d = dr.data, last = Object.keys(d.logs).map((k) => k.split('|')[1]).sort().pop();
+    return `<div class="overlay center" data-action="overlay"><div class="dialog">
+      <div class="big">${pic('📂')}</div>
+      <h3>Sicherung laden?</h3>
+      <p>Die Sicherung enthält ${d.habits.length} Habits und ${d.todos.length} To-Dos${last ? `, letzter Eintrag am ${fmt(last, { day: 'numeric', month: 'long' })}` : ''}. Deine aktuellen Daten (${state.habits.length} Habits, ${state.todos.length} To-Dos) werden dadurch ersetzt.</p>
+      <div class="stack">
+        <button class="btn-primary" data-action="import-confirm">Ersetzen</button>
+        <button class="btn-plain" data-action="close-sheet">Abbrechen</button>
+      </div>
+    </div></div>`;
+  }
+  if (s.type === 'reminder-help') {
+    const body = `<p class="pick-lead">Daruma kann als Web-App keine Mitteilungen schicken. Dein iPhone kann dich aber jeden Tag erinnern:</p>
+      <div class="card help-steps">
+        <div class="row"><span class="step-no">1</span><span>Öffne die App <b>Kurzbefehle</b> und tippe unten auf <b>Automation</b>.</span></div>
+        <div class="row"><span class="step-no">2</span><span>Tippe auf <b>+</b> bzw. <b>Neue Automation</b> und wähle <b>Tageszeit</b>, z.B. 20:00, täglich. Stell <b>Sofort ausführen</b> ein.</span></div>
+        <div class="row"><span class="step-no">3</span><span>Füge die Aktion <b>Mitteilung zeigen</b> hinzu und schreib z.B. „Daruma: Schon alles abgehakt?“.</span></div>
+        <div class="row"><span class="step-no">4</span><span>Fertig. Kommt die Mitteilung, öffnest du Daruma über das Icon auf dem Home-Bildschirm.</span></div>
+      </div>
+      <p class="section-footer">Die Mitteilung kann Daruma nicht direkt öffnen. Auf Firmenhandys sind Automationen manchmal gesperrt.</p>`;
+    return sheetShell('Tägliche Erinnerung', '', '<button class="link" style="font-weight:600" data-action="open-settings">Fertig</button>', body);
+  }
   if (s.type === 'limit-entry') {
     const h = habitById(s.id);
     if (!h) return '';
@@ -1184,7 +1266,19 @@ function saveHabit() {
     dr.options = dr.options.map((o) => o.trim()).filter(Boolean);
   }
   if (dr.kind === 'choice') Object.assign(values, { options: dr.options, multi: dr.multi, minPick: dr.multi ? Math.min(dr.minPick, dr.options.length) : 1, unit: '' });
-  if (dr.id) Object.assign(habitById(dr.id), values);
+  if (dr.kind === 'choice') {
+    const seen = new Set();
+    values.options = values.options.filter((o) => { const k = o.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+    values.minPick = Math.max(1, Math.min(values.minPick, values.options.length));
+  }
+  if (dr.id) {
+    const h = habitById(dr.id);
+    // Regeländerung merken, damit vergangene Tage ihren Status behalten
+    if ((h.kind !== values.kind || h.target !== values.target) && h.createdAt < todayKey()) {
+      h.hist = [...(h.hist || []), { until: todayKey(), kind: h.kind, target: h.target }];
+    }
+    Object.assign(h, values);
+  }
   else state.habits.push({ ...makeHabit(values, nextOrder(state.habits)), ...values });
   ui.sheet = null; ui.draft = null;
   persist();
@@ -1265,7 +1359,8 @@ function todoDraft(t) {
   let when = 'today';
   if (t.plannedDay === addDays(today, 1)) when = 'tomorrow';
   else if (t.plannedDay && t.plannedDay > addDays(today, 1)) when = 'date';
-  return { id: t.id, title: t.title, when, date: t.plannedDay && t.plannedDay > today ? t.plannedDay : addDays(today, 2), isPool: !!t.listId, subs: (t.subs || []).map((x) => ({ ...x })), rollover: rollsOver(t) };
+  const date = t.plannedDay && t.plannedDay > today ? t.plannedDay : addDays(today, 2);
+  return { id: t.id, title: t.title, when, date, whenOrig: when, dateOrig: date, isPool: !!t.listId, subs: (t.subs || []).map((x) => ({ ...x })), rollover: rollsOver(t) };
 }
 
 const cleanSubs = (subs) => (subs || []).filter((x) => x.title.trim()).map((x) => ({ id: x.id, title: x.title.trim(), done: !!x.done }));
@@ -1295,7 +1390,9 @@ function saveTodo() {
     const t = todoById(dr.id);
     t.title = title;
     t.subs = cleanSubs(dr.subs);
-    if (!t.listId && !t.completedAt) t.plannedDay = plannedDay;
+    // Tag nur ändern, wenn „Wann?“ wirklich geändert wurde (sonst ginge „seit …“ verloren)
+    const whenChanged = dr.when !== dr.whenOrig || (dr.when === 'date' && dr.date !== dr.dateOrig);
+    if (!t.listId && !t.completedAt && whenChanged) t.plannedDay = plannedDay;
   } else {
     state.todos.push({ id: uid(), title, plannedDay, completedAt: null, createdAt: today, listId: null, order: nextOrder(state.todos), subs: cleanSubs(dr.subs) });
   }
@@ -1330,32 +1427,65 @@ function pickSurprise() {
   openSheet({ type: 'surprise', id: pick.id });
 }
 
+function backupDone() { state.lastBackup = todayKey(); state.backupSnooze = null; persist(); render(); }
 function exportData() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const json = JSON.stringify(state, null, 2), name = `daruma-sicherung-${todayKey()}.json`;
+  // iPhone: über das Teilen-Menü direkt in „Dateien“/iCloud Drive sichern (Review)
+  try {
+    const file = new File([json], name, { type: 'application/json' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: 'Daruma-Sicherung' }).then(() => { backupDone(); toast('Sicherung gespeichert'); }).catch(() => {});
+      return;
+    }
+  } catch (e) { /* weiter mit Download */ }
+  const blob = new Blob([json], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `daruma-sicherung-${todayKey()}.json`;
+  a.download = name;
   document.body.appendChild(a);
   a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  backupDone();
+}
+function backupDue(today) {
+  if (DEMO && DEMO !== 'backup') return 0;
+  const since = state.lastBackup || state.firstUse || today;
+  const days = Math.round((parseDay(today) - parseDay(since)) / 864e5);
+  if (days < 14 || (state.backupSnooze && state.backupSnooze > today)) return 0;
+  return days;
+}
+function renderBackupHint(d, today) {
+  const days = d === today ? backupDue(today) : 0;
+  if (!days) return '';
+  return `<div class="card backup-hint"><div class="row"><button class="row-main" data-action="export"><span class="emoji">${pic('💾')}</span>
+    <span class="name-wrap"><span class="name">Zeit für eine Sicherung</span><span class="tag">${state.lastBackup ? `Letzte Sicherung vor ${days} Tagen` : 'Noch keine Sicherung'}</span></span></button>
+    <div class="controls"><button class="small-link" data-action="backup-later">Später</button></div></div></div>`;
 }
 
 function importData(file) {
   const reader = new FileReader();
   reader.onload = () => {
+    const old = state;
     try {
       const data = normalize(JSON.parse(reader.result));
       if (!data.habits.length && !data.todos.length) throw new Error('leer');
       data.setupDone = true;
-      state = data;
-      ui.tab = 'today'; ui.day = todayKey();
-      persist();
-      toast('Sicherung geladen');
+      // Probe: lässt sich der Stand anzeigen? Erst dann anbieten (Review QA: kaputte Datei legte die App lahm)
+      state = data; renderToday(); renderProgress(); renderHabits(); renderPool(); state = old;
+      openSheet({ type: 'import-confirm' }, { data });
     } catch (e) {
+      state = old;
       toast('Die Datei konnte nicht gelesen werden');
     }
   };
   reader.readAsText(file);
+}
+function confirmImport() {
+  const old = state, data = ui.draft.data;
+  try { localStorage.setItem(STORAGE_KEY + '.vorImport', JSON.stringify(old)); } catch (e) { /* egal */ }
+  state = data; ui.sheet = null; ui.draft = null; ui.tab = 'today'; ui.day = todayKey();
+  persist();
+  toast('Sicherung geladen', () => { state = old; });
 }
 
 const freqTarget = (el) => (el.dataset.name ? ui.ob.cfg[el.dataset.name] : ui.draft);
@@ -1382,9 +1512,11 @@ const actions = {
   poke(el) { el.classList.remove('wobble'); void el.offsetWidth; el.classList.add('wobble'); },
 
   'undo-habit'(el) {
-    const h = habitById(el.dataset.id), before = JSON.stringify(state);
-    if (h.kind === 'limit') delete state.logs[logKey(h, ui.day)]; else setValue(h, ui.day, 0);
-    persist(); toast(`„${h.name}“ wieder offen`, before);
+    const h = habitById(el.dataset.id), k = logKey(h, ui.day), prev = state.logs[k];
+    if (h.kind === 'limit' && state.habitMode === 'steps') return openSheet({ type: 'limit-entry', id: h.id }, null, '#limit-value');
+    if (h.kind === 'limit') state.logs[k] = LIMIT_OVER; else setValue(h, ui.day, 0);
+    persist();
+    toast(h.kind === 'limit' ? `„${h.name}“ überschritten` : `„${h.name}“ wieder offen`, () => { if (prev === undefined) delete state.logs[k]; else state.logs[k] = prev; });
   },
   'toggle-habit'(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, isDone(h, ui.day) ? 0 : 1); commit(); },
   'catch-up'(el) { const h = habitById(el.dataset.id); setValue(h, addDays(todayKey(), -1), h.kind === 'check' ? 1 : h.target); persist(); toast(`„${h.name}“ für gestern nachgeholt`); },
@@ -1392,7 +1524,7 @@ const actions = {
   step(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, Math.max(0, valueOf(h, ui.day) + Number(el.dataset.dir) * h.step)); commit(); },
   'toggle-limit'(el) {
     const h = habitById(el.dataset.id), k = logKey(h, ui.day);
-    if (isDone(h, ui.day)) delete state.logs[k]; else state.logs[k] = h.target;
+    if (isDone(h, ui.day)) state.logs[k] = LIMIT_OVER; else delete state.logs[k];
     commit();
   },
   'limit-entry'(el) { openSheet({ type: 'limit-entry', id: el.dataset.id }, null, '#limit-value'); },
@@ -1511,16 +1643,29 @@ const actions = {
   'swipe-del'(el) {
     const { kind, id } = el.dataset;
     openSwipe = null;
-    const before = JSON.stringify(state);
-    let label = 'Gelöscht';
-    if (kind === 'todo') { state.todos = state.todos.filter((t) => t.id !== id); label = 'To-Do gelöscht'; }
-    else if (kind === 'habit') { deleteHabit(id); label = 'Habit gelöscht'; }
-    else if (kind === 'question') { state.checkinQuestions = state.checkinQuestions.filter((q) => q.id !== id); label = 'Frage gelöscht'; }
-    persist(); toast(label, before);
+    let label = 'Gelöscht', restore = null;
+    if (kind === 'todo') {
+      const t = todoById(id);
+      state.todos = state.todos.filter((x) => x.id !== id); label = 'To-Do gelöscht';
+      restore = () => { if (t) state.todos.push(t); };
+    } else if (kind === 'habit') {
+      // Nur genau dieses Habit samt Verlauf zurückholen, spätere Änderungen bleiben (Review QA)
+      const h = habitById(id), pre = id + '|';
+      const logs = Object.entries(state.logs).filter(([k]) => k.startsWith(pre));
+      const picks = Object.entries(state.picks || {}).filter(([k]) => k.startsWith(pre));
+      deleteHabit(id); label = 'Habit gelöscht';
+      restore = () => { if (!h) return; state.habits.push(h); logs.forEach(([k, v]) => { state.logs[k] = v; }); picks.forEach(([k, v]) => { state.picks[k] = v; }); };
+    } else if (kind === 'question') {
+      const i = state.checkinQuestions.findIndex((q) => q.id === id), q = state.checkinQuestions[i];
+      state.checkinQuestions = state.checkinQuestions.filter((x) => x.id !== id); label = 'Frage gelöscht';
+      restore = () => { if (q) state.checkinQuestions.splice(Math.max(0, i), 0, q); };
+    }
+    persist(); toast(label, restore);
   },
   undo() {
     if (!ui.undo) return;
-    state = normalize(JSON.parse(ui.undo)); ui.undo = null; ui.toast = null;
+    if (typeof ui.undo === 'function') ui.undo(); else state = normalize(JSON.parse(ui.undo));
+    ui.undo = null; ui.toast = null;
     clearTimeout(toast.timer); commit();
   },
   fold(el) {
@@ -1576,6 +1721,9 @@ const actions = {
   },
 
   export() { exportData(); },
+  'backup-later'() { state.backupSnooze = addDays(todayKey(), 3); commit(); },
+  'import-confirm'() { confirmImport(); },
+  'open-reminder'() { openSheet({ type: 'reminder-help' }); },
   'close-sheet'() { closeSheet(); },
   overlay(el, ev) { if (ev.target === el) closeSheet(); },
 };
@@ -1842,6 +1990,8 @@ function applyDemoScene(scene) {
   if (scene === 'routinescheckin') { ui.tab = 'habits'; ui.routines = 'checkin'; }
   if (scene === 'checkinhome') ui.tab = 'today';
   if (scene === 'checkin') ui.sheet = { type: 'checkin' };
+  if (scene === 'backup') { state.firstUse = addDays(today, -20); state.lastBackup = addDays(today, -16); }
+  if (scene === 'reminder') { ui.tab = 'progress'; ui.sheet = { type: 'reminder-help' }; }
   if (/^(choice|pick|multipick|choiceedit|choicestats)$/.test(scene)) {
     const sport = { ...makeHabit({ name: 'Sport', icon: '🏃', kind: 'choice' }, 1.5), options: ['Laufen', 'Krafttraining', 'Radfahren', 'Yoga', 'Schwimmen'], perWeek: 3, createdAt: addDays(today, -30) };
     const hip = { ...makeHabit({ name: 'Hüftübungen', icon: '🤸', kind: 'choice' }, 1.6), options: ['Taubenpose', 'Seitheben', 'Hip Flexor Stretch', '90/90 Stretch', 'Brücke', 'Clamshells'], multi: true, minPick: 2, target: 2, createdAt: addDays(today, -30) };
@@ -1869,6 +2019,7 @@ if (window.visualViewport) {
 
 /* ---------- Start ---------- */
 if (DEMO) applyDemoScene(DEMO);
+if (loadProblem) setTimeout(() => toast('Deine Daten konnten nicht gelesen werden. Eine Kopie ist aufgehoben. Am besten jetzt deine letzte Sicherung laden.'), 300);
 else if (state.setupDone && !state.tourDone) ui.tour = 0;
 render();
 
