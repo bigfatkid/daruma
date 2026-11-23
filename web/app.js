@@ -90,6 +90,7 @@ function normalize(s) {
     version: 1,
     name: typeof s.name === 'string' ? s.name : '',
     setupDone: s.setupDone !== false, // bestehende Daten (ohne Feld) gelten als eingerichtet
+    tourDone: !!s.tourDone,
     habits: Array.isArray(s.habits) ? s.habits : [],
     logs: s.logs && typeof s.logs === 'object' ? s.logs : {},
     todos: Array.isArray(s.todos) ? s.todos : [],
@@ -217,6 +218,7 @@ const ui = {
   wobble: false,
   lastAllDone: {},
   ob: { step: 0, name: '', habits: [], cfg: {} }, // Einrichtung
+  tour: null, // App-Tour: Index der Station
 };
 
 /* ---------- Kleine Bausteine ---------- */
@@ -284,7 +286,7 @@ const app = document.getElementById('app');
 function render() {
   if (!state.setupDone) { app.innerHTML = renderOnboarding(); return; }
   const screen = ui.tab === 'today' ? renderToday() : ui.tab === 'habits' ? renderHabits() : ui.tab === 'pool' ? renderPool() : renderProgress();
-  app.innerHTML = `<main class="screen">${screen}</main>${renderTabbar()}${renderSheet()}${ui.toast ? `<div class="toast">${esc(ui.toast)}</div>` : ''}`;
+  app.innerHTML = `<main class="screen">${screen}</main>${renderTabbar()}${renderSheet()}${renderTour()}${ui.toast ? `<div class="toast">${esc(ui.toast)}</div>` : ''}`;
   ui.wobble = false;
   if (ui.focus) {
     const el = app.querySelector(ui.focus);
@@ -336,17 +338,11 @@ function renderOnboarding() {
     button = 'Weiter';
   } else {
     const standalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
-    const tile = (icon, title, text) => `<div class="ob-tile">${icon}<strong>${title}</strong><span>${text}</span></div>`;
     body = `<div class="ob-hero ob-done"><div class="daruma done-daruma wobble" data-action="poke">${darumaSVG(true, true)}</div>
       <h1>Alles bereit${ob.name ? `, ${esc(ob.name)}` : ''}!</h1>
-      <p>Schaffst du an einem Tag alle Habits, bekommt Daruma ihr zweites Auge.</p></div>
-      <div class="ob-tiles">
-        ${tile(ICON.sun, 'Heute', 'Abhaken')}
-        ${tile(ICON.loop, 'Habits', 'Anpassen')}
-        ${tile(ICON.tray, 'Pool', 'Sammeln')}
-      </div>
+      <p>Schaffst du an einem Tag alle Habits, bekommt Daruma ihr zweites Auge. Gleich zeige ich dir kurz die App.</p></div>
       <p class="ob-note">${standalone ? '' : 'Tipp: In Safari über Teilen → „Zum Home-Bildschirm“ wird Daruma zur App.<br>'}Deine Daten bleiben auf diesem Gerät. Eine Sicherung findest du unter Fortschritt.</p>`;
-    button = 'Daruma starten';
+    button = 'Los geht’s';
   }
   return `<main class="screen ob">
       <header class="nav"><div class="nav-side">${back}</div>${dots}<div class="nav-side right"></div></header>
@@ -369,7 +365,7 @@ function finishOnboarding() {
   });
   state.name = ob.name.trim();
   state.setupDone = true;
-  ui.tab = 'today'; ui.day = todayKey();
+  ui.tab = 'today'; ui.day = todayKey(); ui.tour = 0;
   window.scrollTo(0, 0);
   commit();
 }
@@ -378,9 +374,29 @@ function toggleRow(label, on, attrs) {
   return `<button class="form-row toggle-row" ${attrs} role="switch" aria-checked="${on}"><span>${label}</span><span class="switch ${on ? 'on' : ''}"><i></i></span></button>`;
 }
 
+/* ---------- App-Tour (einmal nach dem ersten Start) ---------- */
+const TOUR = [
+  ['today', 'Heute', 'Hier hakst du deine Habits ab und erledigst To-Dos. Mit + legst du ein To-Do an, oben wechselst du zwischen den Tagen.'],
+  ['habits', 'Habits', 'Hier legst du Habits an, änderst Ziel und Häufigkeit und bestimmst die Reihenfolge.'],
+  ['pool', 'Pool', 'Für Langzeit-Aufgaben: eigene Listen, Einträge mit Unteraufgaben. Wenn du Lust hast, holst du dir etwas auf Heute.'],
+  ['progress', 'Fortschritt', 'Serien und Quoten für jedes Habit. Unten kannst du eine Sicherung deiner Daten herunterladen.'],
+];
+function renderTour() {
+  if (ui.tour === null || ui.sheet) return '';
+  const i = ui.tour, [, title, text] = TOUR[i], last = i === TOUR.length - 1;
+  return `<div class="tour-dim"></div>
+    <div class="tour-card" style="--arrow:${((i + 0.5) / TOUR.length) * 100}%">
+      <div class="tour-head"><strong>${title}</strong><span>${i + 1} / ${TOUR.length}</span></div>
+      <p>${text}</p>
+      <div class="tour-actions">${last ? '<span></span>' : '<button class="link" data-action="tour-end">Überspringen</button>'}
+        <button class="btn-primary small" data-action="tour-next">${last ? 'Fertig' : 'Weiter'}</button></div>
+    </div>`;
+}
+function startTour() { ui.tour = 0; ui.tab = TOUR[0][0]; ui.poolListId = null; window.scrollTo(0, 0); render(); }
+
 function renderTabbar() {
   const tab = (id, label, icon) => `<button class="tab ${ui.tab === id ? 'active' : ''}" data-action="tab" data-tab="${id}">${icon}<span>${label}</span></button>`;
-  return `<nav class="tabbar">${tab('today', 'Heute', ICON.sun)}${tab('habits', 'Habits', ICON.loop)}${tab('pool', 'Pool', ICON.tray)}${tab('progress', 'Fortschritt', ICON.chart)}</nav>`;
+  return `<nav class="tabbar ${ui.tour !== null ? 'touring' : ''}">${tab('today', 'Heute', ICON.sun)}${tab('habits', 'Habits', ICON.loop)}${tab('pool', 'Pool', ICON.tray)}${tab('progress', 'Fortschritt', ICON.chart)}</nav>`;
 }
 
 function dayTitle(d, today) {
@@ -671,6 +687,7 @@ function renderProgress() {
       <div class="row"><label class="row-main" style="cursor:pointer"><span class="emoji">📂</span><span class="name">Sicherung laden</span><input type="file" accept="application/json,.json" data-action="import" hidden></label></div>
     </div>
     <p class="section-footer">Alles bleibt nur auf diesem iPhone gespeichert. Eine Sicherung ab und zu schadet nicht.</p>
+    <p class="section-footer" style="text-align:center;margin-top:22px"><button class="link" data-action="tour-start">App-Tour noch mal ansehen</button></p>
   `;
 }
 
@@ -983,6 +1000,12 @@ function importData(file) {
 const freqTarget = (el) => (el.dataset.name ? ui.ob.cfg[el.dataset.name] : ui.draft);
 
 const actions = {
+  'tour-next'() {
+    if (ui.tour >= TOUR.length - 1) return actions['tour-end']();
+    ui.tour++; ui.tab = TOUR[ui.tour][0]; ui.poolListId = null; window.scrollTo(0, 0); render();
+  },
+  'tour-end'() { ui.tour = null; ui.tab = 'today'; state.tourDone = true; window.scrollTo(0, 0); commit(); },
+  'tour-start'() { startTour(); },
   tab(el) { ui.tab = el.dataset.tab; if (ui.tab === 'pool') ui.poolListId = null; window.scrollTo(0, 0); render(); },
   'go-today'() { ui.day = todayKey(); render(); },
   'select-day'(el) { ui.day = el.dataset.day; render(); },
@@ -1152,7 +1175,7 @@ setInterval(checkNewDay, 60 * 1000);
 /* ---------- Demo-Daten (nur mit ?demo=...) ---------- */
 function demoState(scene) {
   const today = todayKey();
-  const s = { version: 1, name: 'Matti', setupDone: true, habits: [], logs: {}, todos: [], lists: [] };
+  const s = { version: 1, name: 'Matti', setupDone: true, tourDone: true, habits: [], logs: {}, todos: [], lists: [] };
   const tpls = [...STARTER, findTemplate('Dehnen'), findTemplate('Lesen')];
   tpls.forEach((t, i) => {
     const h = makeHabit(t, i);
@@ -1193,6 +1216,7 @@ function applyDemoScene(scene) {
   if (scene === 'surprise') { ui.tab = 'pool'; ui.sheet = { type: 'surprise', id: state.todos[6].id }; }
   if (scene === 'progress') ui.tab = 'progress';
   if (scene === 'habits') ui.tab = 'habits';
+  if (scene.startsWith('tour')) { ui.tour = Number(scene.slice(4)) || 0; ui.tab = TOUR[ui.tour][0]; }
   if (scene.startsWith('onboarding')) {
     state.setupDone = false; ui.ob.step = Number(scene.slice(10)) || 0;
     ['Wasser trinken', 'Lesen', 'Journaling'].forEach((n) => actions['ob-habit']({ dataset: { name: n } }));
@@ -1207,6 +1231,7 @@ function applyDemoScene(scene) {
 
 /* ---------- Start ---------- */
 if (DEMO) applyDemoScene(DEMO);
+else if (state.setupDone && !state.tourDone) ui.tour = 0;
 render();
 
 if (!DEMO && 'serviceWorker' in navigator) {
