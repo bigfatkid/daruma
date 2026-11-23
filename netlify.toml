@@ -13,3 +13,6 @@
   [headers.values]
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "no-referrer"
+    # Nur eigene Skripte erlauben (keine fremden/eingefügten Inline-Skripte).
+    # Nebeneffekt laut Netlify-Doku: das "Powered by Netlify"-Badge wird nicht angezeigt.
+    Content-Security-Policy = "script-src 'self'; object-src 'none'; base-uri 'self'"
