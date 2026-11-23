@@ -594,8 +594,11 @@ function render() {
   if (!state.setupDone) { app.innerHTML = renderOnboarding() + toastHtml; return; }
   // Scroll-Position im offenen Fenster behalten (sonst springt es bei jeder Änderung nach oben)
   const oldBody = app.querySelector('.sheet-body');
-  const keepScroll = oldBody && ui.sheet && ui.sheet === render.lastSheet ? oldBody.scrollTop : 0;
+  const sameSheet = !!(oldBody && ui.sheet && ui.sheet === render.lastSheet);
+  const keepScroll = sameSheet ? oldBody.scrollTop : 0;
   render.lastSheet = ui.sheet;
+  // Gleiches Fenster neu gezeichnet: nicht wieder hereinfahren lassen (sonst springt es)
+  app.classList.toggle('keep-sheet', sameSheet);
   const screen = ui.tab === 'today' ? renderToday() : ui.tab === 'habits' ? renderHabits() : ui.tab === 'pool' ? renderPool() : renderProgress();
   app.innerHTML = `<main class="screen">${screen}</main>${renderTabbar()}${renderSheet()}${renderTour()}${ui.toast ? `<div class="toast${ui.undo ? ' with-undo' : ''}">${esc(ui.toast)}${ui.undo ? '<button class="toast-undo" data-action="undo">Rückgängig</button>' : ''}</div>` : ''}`;
   ui.wobble = false;

@@ -402,6 +402,7 @@ button:disabled { cursor: default; }
   white-space: nowrap;
 }
 
+.keep-sheet .overlay, .keep-sheet .sheet, .keep-sheet .dialog { animation: none; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slide { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes zoom { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
