@@ -1287,12 +1287,12 @@ function renderSheet() {
     if (!t) return '';
     const today = todayKey();
     const cur = t.plannedDay && t.plannedDay < today ? today : t.plannedDay;
-    const days = Array.from({ length: 7 }, (_, i) => addDays(today, i));
+    const days = Array.from({ length: 8 }, (_, i) => addDays(today, i));
     const label = (d, i) => i === 0 ? 'Heute' : i === 1 ? 'Morgen' : `${fmt(d, { weekday: 'short' })} ${fmt(d, { day: 'numeric' })}.`;
     return `<div class="overlay center" data-action="overlay"><div class="dialog">
       <h3>${esc(t.title)}</h3>
-      <div class="day-grid">${days.map((d, i) => `<button class="${cur === d ? 'on' : ''} ${i < 2 ? 'wide' : ''}" data-action="plan-set" data-day="${d}">${label(d, i)}</button>`).join('')}
-        <label class="${cur && cur > days[6] ? 'on' : ''}">${cur && cur > days[6] ? esc(fmt(cur, { day: 'numeric', month: 'numeric' })) : 'Datum'}<input type="date" data-plan-date min="${today}" value="${cur || ''}"></label></div>
+      <div class="day-grid">${days.map((d, i) => `<button class="${cur === d ? 'on' : ''}" data-action="plan-set" data-day="${d}">${label(d, i)}</button>`).join('')}
+        <label class="${cur && cur > days[7] ? 'on' : ''}">${cur && cur > days[7] ? esc(fmt(cur, { day: 'numeric', month: 'numeric' })) : 'Datum'}<input type="date" data-plan-date min="${today}" value="${cur || ''}"></label></div>
       <div class="stack">
         ${cur ? '<button class="btn-plain" style="color:var(--accent)" data-action="plan-set" data-day="">Zurück ins Projekt</button>' : ''}
         <button class="btn-plain" data-action="close-sheet">Abbrechen</button>
