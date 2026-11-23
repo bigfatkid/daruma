@@ -709,6 +709,9 @@ function habitRow(h, d, future) {
       <button class="step" data-action="step" data-id="${h.id}" data-dir="1" ${dis} aria-label="Mehr">+</button>
       <button class="status-btn" data-action="fill-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Ganz erledigt'}">${statusCircle(done ? 'done' : 'open', v / h.target)}</button>`
       : `<button class="status-btn" data-action="fill-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Erledigt'}">${statusCircle(done ? 'done' : 'open')}</button>`;
+  } else if (!steps) {
+    // Limit im Modus "ganz oder gar nicht": nur abhaken, dass das Limit eingehalten wurde
+    controls = `<button class="status-btn" data-action="toggle-limit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Limit eingehalten'}">${statusCircle(done ? 'done' : 'open')}</button>`;
   } else {
     const has = getValue(h, d) !== undefined;
     controls = `<button class="limit-btn" data-action="limit-entry" data-id="${h.id}" ${dis}>
@@ -717,15 +720,15 @@ function habitRow(h, d, future) {
     </button>`;
   }
   const sub = [
-    h.kind === 'count' ? (steps ? `${num(v)}/${num(h.target)} ${esc(h.unit)}` : `${num(h.target)} ${esc(h.unit)}`) : h.kind === 'limit' && getValue(h, d) === undefined ? `max. ${num(h.target)} ${esc(h.unit)}` : '',
+    h.kind === 'count' ? (steps ? `${num(v)}/${num(h.target)} ${esc(h.unit)}` : `${num(h.target)} ${esc(h.unit)}`) : h.kind === 'limit' && (!steps || getValue(h, d) === undefined) ? `max. ${num(h.target)} ${esc(h.unit)}` : '',
     isWeekly(h) ? `${weekCount(h, d)}/${h.perWeek} diese Woche` : '',
   ].filter(Boolean).join(' · ');
   const label = sub
     ? `<span class="name-wrap"><span class="name">${esc(h.name)}</span><span class="tag">${sub}</span></span>`
     : `<span class="name">${esc(h.name)}</span>`;
   return `<div class="row hab-row ${done ? 'is-done' : ''}">
-    ${h.kind !== 'limit' && !future
-      ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${pic(h.icon)}</span>${label}</button>`
+    ${(h.kind !== 'limit' || !steps) && !future
+      ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : h.kind === 'limit' ? 'toggle-limit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${pic(h.icon)}</span>${label}</button>`
       : `<div class="row-main"><span class="emoji">${pic(h.icon)}</span>${label}</div>`}
     <div class="controls">${controls}</div>
   </div>`;
@@ -1219,6 +1222,11 @@ const actions = {
   'catch-up'(el) { const h = habitById(el.dataset.id); setValue(h, addDays(todayKey(), -1), h.kind === 'check' ? 1 : h.target); persist(); toast(`„${h.name}“ für gestern nachgeholt`); },
   'fill-habit'(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, isDone(h, ui.day) ? 0 : h.target); commit(); },
   step(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, Math.max(0, valueOf(h, ui.day) + Number(el.dataset.dir) * h.step)); commit(); },
+  'toggle-limit'(el) {
+    const h = habitById(el.dataset.id), k = logKey(h, ui.day);
+    if (isDone(h, ui.day)) delete state.logs[k]; else state.logs[k] = h.target;
+    commit();
+  },
   'limit-entry'(el) { openSheet({ type: 'limit-entry', id: el.dataset.id }, null, '#limit-value'); },
   'clear-limit'() { const h = habitById(ui.sheet.id); delete state.logs[logKey(h, ui.day)]; ui.sheet = null; commit(); },
   'edit-habit'(el) { openSheet({ type: 'habit-editor' }, habitDraft(habitById(el.dataset.id))); },
