@@ -73,10 +73,10 @@ const HABIT_ICONS = ['✅', '🦴', '💧', '🧘', '📖', '🚶', '🏃', '�
 const LIST_ICONS = ['📦', '🏠', '📚', '🔨', '✈️', '🛒', '🎁', '🎬', '🍳', '💪', '💡', '🎵',
   '🌱', '🎨', '⭐', '❤️', '📷', '🎮', '🐶', '🐱', '🚗', '💼', '🎓', '🏡', '💰', '🧳'];
 const KIND_TEXT = {
-  check: 'Ja oder nein: einmal antippen, dann ist es für heute erledigt.',
-  count: 'Mit Ziel und Einheit, z.B. 10 Seiten oder 3 L. Mit + und − zählst du hoch, ein Tipp auf den Namen hakt es ganz ab.',
-  limit: 'Du trägst abends einen Wert ein. Erledigt, wenn er im Limit bleibt, z.B. Bildschirmzeit.',
-  choice: 'Beim Abhaken wählst du aus, was du gemacht hast, z.B. welche Sportart. Was am längsten her ist, steht oben.',
+  check: 'z.B. Meditieren',
+  count: 'z.B. 10 Seiten oder 3 L',
+  limit: 'z.B. Bildschirmzeit',
+  choice: 'z.B. welche Sportart',
 };
 const WEEKDAYS = [[1, 'Mo'], [2, 'Di'], [3, 'Mi'], [4, 'Do'], [5, 'Fr'], [6, 'Sa'], [0, 'So']];
 
@@ -415,7 +415,7 @@ function renderQuestionList() {
       <button class="row-main" data-action="edit-question" data-id="${q.id}"><span class="emoji">${pic(q.icon || '❓')}</span>
         <span class="name-wrap"><span class="name">${esc(q.text)}</span><span class="tag">${qTypeLabel(q.type)}</span></span></button>
       ${qs.length > 1 ? dragHandle('question') : ''}`)).join('')}</div>` : ''}
-    <p class="section-footer">${qs.length ? 'Die Fragen beantwortest du täglich auf Heute.' : 'Kurze Fragen zu deinem Tag, z.B. Stimmung oder Schlaf. Sobald du eine auswählst, erscheint der Check-in auf Heute.'}</p>
+    ${qs.length ? '' : '<p class="section-footer">Kurze Fragen zu deinem Tag, z.B. Stimmung oder Schlaf. Sobald du eine auswählst, erscheint der Check-in auf Heute.</p>'}
     <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="open-q-catalog"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Frage hinzufügen</span></button></div></div>`;
 }
 
@@ -438,7 +438,6 @@ function renderQuestionEditor() {
     ${dr.type === 'scale' ? `<div class="card" style="margin-top:12px">
       <label class="form-row"><span>Links (0)</span><input data-field="lo" value="${esc(dr.lo)}" placeholder="wenig"></label>
       <label class="form-row"><span>Rechts (10)</span><input data-field="hi" value="${esc(dr.hi)}" placeholder="viel"></label></div>` : ''}
-    <p class="section-footer">${dr.type === 'scale' ? 'Du schiebst einen Regler von 0 bis 10. Die Wörter stehen links und rechts darunter.' : dr.type === 'yesno' ? 'Du antwortest mit Ja oder Nein.' : 'Du schreibst ein paar freie Worte.'}</p>
     <h3 class="section-title">Symbol</h3>
     <div class="card"><div class="icon-grid">${(Q_ICONS.includes(dr.icon) ? Q_ICONS : [dr.icon, ...Q_ICONS]).map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${pic(i)}</button>`).join('')}</div></div>
     ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
@@ -499,7 +498,6 @@ function renderSettingsSheet() {
     <input class="field" id="settings-name" data-setting="name" value="${esc(state.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name">
     <h3 class="section-title">Habits mit Ziel abhaken</h3>
     <div class="segmented">${[['whole', 'Ganz oder gar nicht'], ['steps', 'Schritt für Schritt']].map(([k, l]) => `<button class="${(state.habitMode || 'whole') === k ? 'on' : ''}" data-action="habit-mode" data-mode="${k}">${l}</button>`).join('')}</div>
-    <p class="section-footer">${(state.habitMode || 'whole') === 'steps' ? 'Mit − und + zählst du nach und nach hoch, z.B. jedes Glas Wasser.' : 'Ein Tipp auf den Kreis hakt das ganze Ziel ab. Ruhiger und schneller.'}</p>
     <h3 class="section-title">Deine Daten</h3>
     <div class="card">
       <div class="row"><button class="row-main" data-action="export"><span class="emoji">${pic('💾')}</span><span class="name">Sicherung herunterladen</span></button></div>
@@ -926,7 +924,7 @@ function renderHabits() {
         <span class="name-wrap"><span class="name">${esc(h.name)}</span><span class="tag">${esc([goalText(h), scheduleText(h)].filter(Boolean).join(' · '))}</span></span>
       </button>
       ${habits.length > 1 ? dragHandle('habit') : ''}`)).join('')}</div>
-    <p class="section-footer">Tippe auf ein Habit, um es zu bearbeiten. Nach links wischen zum Löschen. Am Griff rechts festhalten und ziehen, um die Reihenfolge auf Heute zu ändern.</p>
+    
     <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="open-catalog"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Habit hinzufügen</span></button></div></div>`;
 }
 
@@ -1014,7 +1012,7 @@ function renderPoolList(list, today) {
         <button class="pill add-btn" type="submit">Hinzufügen</button>
       </form>
     </div>
-    <p class="section-footer">Nicht geschafft? Dann rutscht es auf den nächsten Tag.</p>
+    
     ${done.length ? `<h3 class="section-title">Erledigt</h3><div class="card">${done.map((t) => `<div class="row">
       <span class="row-main"><span class="name struck">${esc(t.title)}</span></span>
       <div class="controls"><button class="small-link" data-action="restore" data-id="${t.id}">Zurückholen</button></div>
@@ -1179,7 +1177,7 @@ function renderSheet() {
           <span class="value" style="min-width:34px;text-align:center">${dr.minPick}</span>
           <button class="step" data-action="min-pick" data-dir="1" ${dr.minPick >= Math.max(1, dr.options.length) ? 'disabled' : ''} aria-label="Mehr">+</button></span></div>` : ''}
       </div>
-      <p class="section-footer">Beim Abhaken kannst du auch einmalig etwas anderes eintragen. Das kommt nicht dauerhaft in die Liste.</p>` : ''}
+      ` : ''}
       ${dr.kind !== 'check' && dr.kind !== 'choice' ? `<h3 class="section-title">${dr.kind === 'count' ? 'Ziel' : 'Limit'}</h3>
       <div class="card">
         <label class="form-row"><span>${dr.kind === 'count' ? 'Ziel pro Tag' : 'Höchstens'}</span><input data-field="target" inputmode="decimal" value="${esc(dr.target)}"></label>
@@ -1208,7 +1206,7 @@ function renderSheet() {
         <div class="segmented" style="margin-bottom:10px">${[...(dr.isPool ? [['none', 'Offen']] : []), ['today', 'Heute'], ['tomorrow', 'Morgen'], ['date', 'Datum']].map(([k, l]) => `<button class="${dr.when === k ? 'on' : ''}" data-action="set-when" data-when="${k}">${l}</button>`).join('')}</div>
         ${dr.when === 'date' ? `<label class="form-row"><span>Datum</span><input type="date" data-field="date" value="${esc(dr.date)}" min="${today}"></label>` : ''}
       </div>
-      <p class="section-footer">Nicht geschafft? Dann rutscht es automatisch auf den nächsten Tag.${dr.isPool ? ' „Offen“ legt es zurück ins Projekt.' : ''}</p>
+      
       ${!dr.isPool ? '' : `<h3 class="section-title">Unteraufgaben</h3>
       <div class="card">
         ${dr.subs.map((x, i) => `<div class="row">
@@ -1219,7 +1217,7 @@ function renderSheet() {
         <form class="row add-row" data-form="add-sub"><span class="plus">+</span><input id="sub-new" placeholder="Unteraufgabe eintippen" autocomplete="off" enterkeyhint="done">
           <button class="pill add-btn" type="submit">Hinzufügen</button></form>
       </div>
-      <p class="section-footer">Große Aufgaben in kleine Schritte teilen, z.B. „Flüge vergleichen“, „Hotel buchen“.</p>`}
+      `}
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
       ${isNew ? '' : `<div class="card" style="margin-top:28px">
         <button class="btn-danger" data-action="delete-todo">${dr.confirmDelete ? 'Wirklich löschen? Nochmal tippen' : 'Löschen'}</button>
