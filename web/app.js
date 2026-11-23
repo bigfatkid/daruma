@@ -54,6 +54,11 @@ const CATALOG = [
 ];
 const findTemplate = (name) => CATALOG.flatMap((c) => c.items).find((t) => t.name === name);
 const STARTER = ['Meditieren', '3 L Wasser trinken', 'Bildschirmzeit'].map(findTemplate);
+const LIST_SUGGESTIONS = [
+  { name: 'Haushalt', icon: '🏠' }, { name: 'Projekte', icon: '🔨' }, { name: 'Ausflüge & Reisen', icon: '✈️' },
+  { name: 'Bücher', icon: '📚' }, { name: 'Filme & Serien', icon: '🎬' }, { name: 'Rezepte zum Ausprobieren', icon: '🍳' },
+  { name: 'Einkaufen & Besorgungen', icon: '🛒' }, { name: 'Geschenkideen', icon: '🎁' },
+];
 
 const HABIT_ICONS = ['✅', '💧', '🧘', '📖', '🚶', '🏃', '🤸', '🦵', '🙏', '🍃', '🛏️', '📵',
   '☕', '⏳', '✨', '🗒️', '💊', '🥕', '🎵', '💪', '🌙', '☀️', '✍️', '🧠'];
@@ -75,12 +80,15 @@ function makeHabit(t, order) {
 }
 
 /* ---------- Speicher ---------- */
+// Neue Nutzer starten leer und werden durch die Einrichtung geführt.
 function freshState() {
-  return { version: 1, habits: STARTER.map((t, i) => makeHabit(t, i)), logs: {}, todos: [], lists: [] };
+  return { version: 1, name: '', setupDone: false, habits: [], logs: {}, todos: [], lists: [] };
 }
 function normalize(s) {
   return {
     version: 1,
+    name: typeof s.name === 'string' ? s.name : '',
+    setupDone: s.setupDone !== false, // bestehende Daten (ohne Feld) gelten als eingerichtet
     habits: Array.isArray(s.habits) ? s.habits : [],
     logs: s.logs && typeof s.logs === 'object' ? s.logs : {},
     todos: Array.isArray(s.todos) ? s.todos : [],
@@ -175,6 +183,7 @@ const ui = {
   toast: null,
   wobble: false,
   lastAllDone: {},
+  ob: { step: 0, name: '', habits: [], lists: [] }, // Einrichtung
 };
 
 /* ---------- Kleine Bausteine ---------- */
@@ -240,6 +249,7 @@ function weekRing(progress, selected, future) {
 const app = document.getElementById('app');
 
 function render() {
+  if (!state.setupDone) { app.innerHTML = renderOnboarding(); return; }
   const screen = ui.tab === 'today' ? renderToday() : ui.tab === 'habits' ? renderHabits() : ui.tab === 'pool' ? renderPool() : renderProgress();
   app.innerHTML = `<main class="screen">${screen}</main>${renderTabbar()}${renderSheet()}${ui.toast ? `<div class="toast">${esc(ui.toast)}</div>` : ''}`;
   ui.wobble = false;
@@ -248,6 +258,73 @@ function render() {
     ui.focus = null;
     if (el) { el.focus(); if (el.select && el.value) el.select(); }
   }
+}
+
+/* ---------- Einrichtung beim ersten Start ---------- */
+function renderOnboarding() {
+  const ob = ui.ob;
+  const steps = 4;
+  const dots = `<div class="ob-dots">${Array.from({ length: steps }, (_, i) => `<i class="${i === ob.step ? 'on' : ''}"></i>`).join('')}</div>`;
+  const back = ob.step > 0 ? '<button class="link" data-action="ob-back">Zurück</button>' : '';
+  const pick = (on) => statusCircle(on ? 'done' : 'open');
+  let body, button;
+
+  if (ob.step === 0) {
+    body = `<div class="ob-hero"><div class="daruma big-daruma wobble" data-action="poke">${darumaSVG(false)}</div>
+      <h1>Willkommen bei Daruma</h1>
+      <p>In Japan malt man der Daruma-Figur ein Auge aus, wenn man sich ein Ziel setzt, und das zweite, wenn man es erreicht hat. Hier bekommt sie ihr zweites Auge an jedem Tag, an dem du alle Habits schaffst.</p></div>
+      <h3 class="section-title">Wie heißt du?</h3>
+      <input class="field" id="ob-name" value="${esc(ob.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name" enterkeyhint="next">
+      <p class="section-footer">Bleibt nur auf diesem Gerät.</p>
+      <div class="card" style="margin-top:28px"><div class="row"><label class="row-main" style="cursor:pointer"><span class="emoji">📂</span><span class="name">Ich habe schon eine Sicherung</span><input type="file" accept="application/json,.json" data-action="import" hidden></label></div></div>`;
+    button = 'Los geht’s';
+  } else if (ob.step === 1) {
+    body = `<h1 class="large-title">Deine Habits</h1>
+      <p class="ob-lead">Was willst du dir jeden Tag angewöhnen? Wähle ein paar aus. Lieber klein anfangen, ergänzen und ändern kannst du alles später im Reiter Habits.</p>
+      ${CATALOG.map((c) => `<h3 class="section-title">${esc(c.name)}</h3><div class="card">${c.items.map((t) => {
+        const on = ob.habits.includes(t.name);
+        const goal = t.kind === 'count' ? `${num(t.target)} ${t.unit}` : t.kind === 'limit' ? `max. ${num(t.target)} ${t.unit}` : '';
+        return `<div class="row"><button class="row-main" data-action="ob-habit" data-name="${esc(t.name)}">
+          <span class="emoji">${t.icon}</span><span class="name" style="flex:1">${esc(t.name)}</span>${goal ? `<span class="value">${esc(goal)}</span>` : ''}${pick(on)}</button></div>`;
+      }).join('')}</div>`).join('')}`;
+    button = ob.habits.length ? `Weiter mit ${ob.habits.length} Habit${ob.habits.length === 1 ? '' : 's'}` : 'Ohne Habits weiter';
+  } else if (ob.step === 2) {
+    body = `<h1 class="large-title">Dein Pool</h1>
+      <p class="ob-lead">Im Pool sammelst du Dinge, die nicht jeden Tag dran sind. Wenn du Zeit und Lust hast, holst du dir etwas davon auf Heute. Welche Listen willst du haben?</p>
+      <div class="card">${LIST_SUGGESTIONS.map((l) => `<div class="row"><button class="row-main" data-action="ob-list" data-name="${esc(l.name)}">
+        <span class="emoji">${l.icon}</span><span class="name" style="flex:1">${esc(l.name)}</span>${pick(ob.lists.includes(l.name))}</button></div>`).join('')}</div>
+      <p class="section-footer">Eigene Listen legst du später im Reiter Pool an.</p>`;
+    button = ob.lists.length ? `Weiter mit ${ob.lists.length} Liste${ob.lists.length === 1 ? '' : 'n'}` : 'Ohne Listen weiter';
+  } else {
+    body = `<div class="ob-hero"><div class="daruma big-daruma wobble" data-action="poke">${darumaSVG(true, true)}</div>
+      <h1>Alles bereit${ob.name ? `, ${esc(ob.name)}` : ''}!</h1></div>
+      <div class="card ob-tips">
+        <p><span class="emoji">☀️</span><span><strong>Heute</strong>: Habits abhaken und To-Dos erledigen. Mit + legst du ein To-Do an.</span></p>
+        <p><span class="emoji">🔁</span><span><strong>Habits</strong>: anlegen, bearbeiten, Reihenfolge ändern.</span></p>
+        <p><span class="emoji">🪣</span><span><strong>Pool</strong>: Ideen sammeln und bei Lust auf Heute holen.</span></p>
+        <p><span class="emoji">📱</span><span><strong>Tipp</strong>: In Safari über Teilen → „Zum Home-Bildschirm“ wird Daruma zur App.</span></p>
+        <p><span class="emoji">💾</span><span><strong>Wichtig</strong>: Deine Daten liegen nur auf diesem Gerät. Unter Fortschritt kannst du ab und zu eine Sicherung herunterladen.</span></p>
+      </div>`;
+    button = 'Daruma starten';
+  }
+  return `<main class="screen ob">
+      <header class="nav"><div class="nav-side">${back}</div>${dots}<div class="nav-side right"></div></header>
+      ${body}
+    </main>
+    <div class="ob-footer"><button class="btn-primary" data-action="ob-next">${button}</button></div>`;
+}
+
+function finishOnboarding() {
+  const ob = ui.ob;
+  const all = CATALOG.flatMap((c) => c.items).filter((t) => ob.habits.includes(t.name));
+  all.forEach((t) => state.habits.push(makeHabit(t, nextOrder(state.habits))));
+  LIST_SUGGESTIONS.filter((l) => ob.lists.includes(l.name))
+    .forEach((l) => state.lists.push({ id: uid(), name: l.name, icon: l.icon, order: nextOrder(state.lists) }));
+  state.name = ob.name.trim();
+  state.setupDone = true;
+  ui.tab = 'today'; ui.day = todayKey();
+  window.scrollTo(0, 0);
+  commit();
 }
 
 function renderTabbar() {
@@ -281,7 +358,7 @@ function renderToday() {
     .sort((a, b) => (!!a.completedAt - !!b.completedAt) || byOrder(a, b));
 
   const msg = future ? 'Dieser Tag kommt noch. Abhaken kannst du, wenn er da ist.'
-    : allDone ? 'Daruma hat beide Augen. Stark!'
+    : allDone ? `Daruma hat beide Augen. Stark${state.name ? `, ${esc(state.name)}` : ''}!`
     : 'Schaffst du alle, malt Daruma das zweite Auge aus.';
 
   return `
@@ -771,7 +848,9 @@ function importData(file) {
     try {
       const data = normalize(JSON.parse(reader.result));
       if (!data.habits.length && !data.todos.length) throw new Error('leer');
+      data.setupDone = true;
       state = data;
+      ui.tab = 'today'; ui.day = todayKey();
       persist();
       toast('Sicherung geladen');
     } catch (e) {
@@ -836,6 +915,15 @@ const actions = {
     list.forEach((h, n) => { h.order = n; });
     commit();
   },
+  'ob-next'() {
+    const ob = ui.ob;
+    if (ob.step === 0) { const f = document.getElementById('ob-name'); ob.name = f ? f.value.trim() : ''; }
+    if (ob.step >= 3) return finishOnboarding();
+    ob.step++; window.scrollTo(0, 0); render();
+  },
+  'ob-back'() { ui.ob.step = Math.max(0, ui.ob.step - 1); window.scrollTo(0, 0); render(); },
+  'ob-habit'(el) { const a = ui.ob.habits, n = el.dataset.name; ui.ob.habits = a.includes(n) ? a.filter((x) => x !== n) : [...a, n]; render(); },
+  'ob-list'(el) { const a = ui.ob.lists, n = el.dataset.name; ui.ob.lists = a.includes(n) ? a.filter((x) => x !== n) : [...a, n]; render(); },
   'set-icon'(el) { ui.draft.icon = el.dataset.icon; render(); },
   'save-habit'() { saveHabit(); },
   'delete-habit'() {
@@ -907,6 +995,7 @@ document.addEventListener('submit', (ev) => {
 
 // Enter in Text-Feldern der Sheets = Sichern
 document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter' && ev.target.id === 'ob-name') { ev.preventDefault(); actions['ob-next'](); return; }
   if (ev.key !== 'Enter' || !ui.sheet || ev.target.tagName !== 'INPUT' || ev.target.closest('form')) return;
   ev.preventDefault();
   if (ui.sheet.type === 'todo-editor') saveTodo();
@@ -926,7 +1015,7 @@ setInterval(checkNewDay, 60 * 1000);
 /* ---------- Demo-Daten (nur mit ?demo=...) ---------- */
 function demoState(scene) {
   const today = todayKey();
-  const s = { version: 1, habits: [], logs: {}, todos: [], lists: [] };
+  const s = { version: 1, name: 'Matti', setupDone: true, habits: [], logs: {}, todos: [], lists: [] };
   const tpls = [...STARTER, findTemplate('10 Minuten Dehnen'), findTemplate('10 Seiten lesen')];
   tpls.forEach((t, i) => {
     const h = makeHabit(t, i);
@@ -967,6 +1056,7 @@ function applyDemoScene(scene) {
   if (scene === 'surprise') { ui.tab = 'pool'; ui.sheet = { type: 'surprise', id: state.todos[6].id }; }
   if (scene === 'progress') ui.tab = 'progress';
   if (scene === 'habits') ui.tab = 'habits';
+  if (scene.startsWith('onboarding')) { state.setupDone = false; ui.ob.step = Number(scene.slice(10)) || 0; }
   if (scene === 'catalog' || scene === 'editor') ui.tab = 'habits';
   if (scene === 'catalog') ui.sheet = { type: 'catalog' };
   if (scene === 'editor') { ui.sheet = { type: 'habit-editor' }; ui.draft = habitDraft(state.habits[1]); }
