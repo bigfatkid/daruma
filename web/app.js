@@ -33,27 +33,27 @@ const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0);
 const CATALOG = [
   { name: 'Körper', items: [
     { name: 'Wasser trinken', icon: '💧', kind: 'count', target: 3, step: 0.5, unit: 'L' },
-    { name: '10 Minuten Dehnen', icon: '🤸', kind: 'check' },
     { name: 'Schritte', icon: '🚶', kind: 'count', target: 10000, step: 1000, unit: 'Schritte' },
     { name: 'Sport', icon: '🏃', kind: 'check' },
+    { name: '10 Minuten Dehnen', icon: '🤸', kind: 'check' },
     { name: 'Obst oder Gemüse', icon: '🥕', kind: 'count', target: 400, step: 100, unit: 'g' },
+    { name: 'Vor 23 Uhr ins Bett', icon: '🛏️', kind: 'check' },
+    { name: 'Kein Kaffee nach 14 Uhr', icon: '☕', kind: 'check' },
   ] },
-  { name: 'Kopf', items: [
-    { name: 'Meditieren', icon: '🧘', kind: 'check' },
+  { name: 'Geist', items: [
     { name: '10 Seiten lesen', icon: '📖', kind: 'check' },
+    { name: 'Etwas Neues lernen', icon: '🧠', kind: 'check' },
+    { name: 'Morgens den Tag planen', icon: '🗒️', kind: 'check' },
+    { name: 'Bildschirmzeit', icon: '⏳', kind: 'limit', target: 90, step: 1, unit: 'min' },
+    { name: 'Kein Handy im Bett', icon: '📵', kind: 'check' },
+    { name: '5 Minuten aufräumen', icon: '✨', kind: 'check' },
+  ] },
+  { name: 'Seele', items: [
+    { name: 'Meditieren', icon: '🧘', kind: 'check' },
     { name: 'Journaling', icon: '✍️', kind: 'check' },
     { name: '3 Dinge, für die ich dankbar bin', icon: '🙏', kind: 'check' },
     { name: 'Spaziergang ohne Handy', icon: '🍃', kind: 'check' },
-  ] },
-  { name: 'Schlaf', items: [
-    { name: 'Vor 23 Uhr ins Bett', icon: '🛏️', kind: 'check' },
-    { name: 'Kein Handy im Bett', icon: '📵', kind: 'check' },
-    { name: 'Kein Kaffee nach 14 Uhr', icon: '☕', kind: 'check' },
-  ] },
-  { name: 'Struktur', items: [
-    { name: 'Bildschirmzeit', icon: '⏳', kind: 'limit', target: 90, step: 1, unit: 'min' },
-    { name: 'Morgens den Tag planen', icon: '🗒️', kind: 'check' },
-    { name: '5 Minuten aufräumen', icon: '✨', kind: 'check' },
+    { name: 'Bei Freunden oder Familie melden', icon: '💬', kind: 'check' },
   ] },
 ];
 const findTemplate = (name) => CATALOG.flatMap((c) => c.items).find((t) => t.name === name);
@@ -65,7 +65,7 @@ const LIST_SUGGESTIONS = [
 ];
 
 const HABIT_ICONS = ['✅', '💧', '🧘', '📖', '🚶', '🏃', '🤸', '🦵', '🙏', '🍃', '🛏️', '📵',
-  '☕', '⏳', '✨', '🗒️', '💊', '🥕', '🎵', '💪', '🌙', '☀️', '✍️', '🧠'];
+  '☕', '⏳', '✨', '🗒️', '💊', '🥕', '🎵', '💪', '🌙', '☀️', '✍️', '🧠', '💬'];
 const LIST_ICONS = ['📦', '🏠', '📚', '🔨', '✈️', '🛒', '🎁', '🎬', '🍳', '💪', '💡', '🎵',
   '🌱', '🎨', '⭐', '❤️', '📷', '🎮'];
 const KIND_TEXT = {
