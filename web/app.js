@@ -59,9 +59,9 @@ const findTemplate = (name) => CATALOG.flatMap((c) => c.items).find((t) => t.nam
 const STARTER = ['Meditieren', 'Wasser trinken', 'Bildschirmzeit'].map(findTemplate);
 
 const HABIT_ICONS = ['✅', '💧', '🧘', '📖', '🚶', '🏃', '🤸', '🦵', '🙏', '🍃', '🛏️', '📵',
-  '☕', '⏳', '✨', '🗒️', '💊', '🥕', '🎵', '💪', '🌙', '☀️', '✍️', '🧠', '💬'];
+  '☕', '⏳', '✨', '🗒️', '💊', '🥕', '🎵', '💪', '🌙', '☀️', '✍️', '🧠', '💬', '🐶'];
 const LIST_ICONS = ['📦', '🏠', '📚', '🔨', '✈️', '🛒', '🎁', '🎬', '🍳', '💪', '💡', '🎵',
-  '🌱', '🎨', '⭐', '❤️', '📷', '🎮'];
+  '🌱', '🎨', '⭐', '❤️', '📷', '🎮', '🐶', '🐱', '🚗', '💼', '🎓', '🏡', '💰', '🧳'];
 const KIND_TEXT = {
   check: 'Ja oder nein: einmal antippen, dann ist es für heute erledigt.',
   count: 'Mit Ziel und Einheit, z.B. 10 Seiten oder 3 L. Mit + und − zählst du hoch, ein Tipp auf den Namen hakt es ganz ab.',
@@ -439,7 +439,7 @@ function renderToday() {
   return `
     <header class="nav">
       <div class="nav-side">${d !== today ? '<button class="link" data-action="go-today">Zu heute</button>' : ''}</div>
-      <div class="nav-side right"><button class="icon-btn" data-action="new-todo" aria-label="To-Do hinzufügen">${ICON.plus}</button></div>
+      <div class="nav-side right"><button class="icon-btn" data-action="focus-new-todo" aria-label="To-Do hinzufügen">${ICON.plus}</button></div>
     </header>
     <h1 class="large-title">${esc(dayTitle(d, today))}</h1>
 
@@ -472,9 +472,12 @@ function renderToday() {
 
     <h3 class="section-title">To-Dos</h3>
     <div class="card">
-      ${todos.length ? todos.map((t) => todoRow(t, today, future)).join('')
-        : d === today ? '<p class="empty">Nichts offen. <button class="link" data-action="tab" data-tab="pool">Lust auf mehr? Schau in deine Projekte.</button></p>'
-        : '<p class="empty">Keine To-Dos an diesem Tag.</p>'}
+      ${todos.map((t) => todoRow(t, today, future)).join('')}
+      ${d >= today ? `<form class="row add-row" data-form="add-todo">
+        <span class="plus">+</span>
+        <input id="todo-new" placeholder="${d === today ? 'Neues To-Do für heute' : 'Neues To-Do'}" autocomplete="off" enterkeyhint="done">
+        <button class="pill add-btn" type="submit">Hinzufügen</button>
+      </form>` : todos.length ? '' : '<p class="empty">Keine To-Dos an diesem Tag.</p>'}
     </div>
   `;
 }
@@ -647,6 +650,7 @@ function renderPoolList(list, today) {
       <form class="row add-row" data-form="add-pool-item">
         <span class="plus">+</span>
         <input id="pool-new" name="title" placeholder="Neue Aufgabe" autocomplete="off" enterkeyhint="done">
+        <button class="pill add-btn" type="submit">Hinzufügen</button>
       </form>
     </div>
     <p class="section-footer">Tippe auf „Auf Heute“, um dir etwas in deinen Tag zu holen. Was du nicht schaffst, landet morgen wieder hier im Projekt.</p>
@@ -775,7 +779,8 @@ function renderSheet() {
           <span class="row-main"><span class="name ${x.done ? 'struck' : ''}">${esc(x.title)}</span></span>
           <div class="controls"><button class="small-link" data-action="sub-del" data-i="${i}" aria-label="Entfernen">✕</button></div>
         </div>`).join('')}
-        <div class="row add-row"><span class="plus">+</span><input id="sub-new" placeholder="Schritt hinzufügen" autocomplete="off" enterkeyhint="done"></div>
+        <form class="row add-row" data-form="add-sub"><span class="plus">+</span><input id="sub-new" placeholder="Unteraufgabe eintippen" autocomplete="off" enterkeyhint="done">
+          <button class="pill add-btn" type="submit">Hinzufügen</button></form>
       </div>
       <p class="section-footer">Große Aufgaben in kleine Schritte teilen, z.B. „Flüge vergleichen“, „Hotel buchen“.</p>
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
@@ -1030,6 +1035,7 @@ const actions = {
     commit();
   },
   'edit-todo'(el) { openSheet({ type: 'todo-editor' }, todoDraft(todoById(el.dataset.id))); },
+  'focus-new-todo'() { if (ui.day < todayKey()) ui.day = todayKey(); ui.focus = '#todo-new'; render(); const el = document.getElementById('todo-new'); if (el) el.scrollIntoView({ block: 'center' }); },
   'new-todo'() { openSheet({ type: 'todo-editor' }, todoDraft(null), '#todo-title'); },
   'sub-toggle'(el) { const x = ui.draft.subs[Number(el.dataset.i)]; x.done = !x.done; syncSubs(); },
   'sub-del'(el) { ui.draft.subs.splice(Number(el.dataset.i), 1); syncSubs(); },
@@ -1139,6 +1145,17 @@ document.addEventListener('change', (ev) => {
 document.addEventListener('submit', (ev) => {
   const form = ev.target;
   ev.preventDefault();
+  if (form.dataset.form === 'add-sub') { addSub(); return; }
+  if (form.dataset.form === 'add-todo') {
+    const input = form.querySelector('input');
+    const title = input.value.trim();
+    if (!title) return;
+    const d = ui.day < todayKey() ? todayKey() : ui.day;
+    state.todos.push({ id: uid(), title, plannedDay: d, completedAt: null, createdAt: todayKey(), listId: null, order: nextOrder(state.todos), subs: [], rollover: true });
+    ui.focus = '#todo-new';
+    commit();
+    return;
+  }
   if (form.dataset.form === 'add-pool-item') {
     const input = form.querySelector('input');
     const title = input.value.trim();
@@ -1158,7 +1175,6 @@ document.addEventListener('submit', (ev) => {
 // Enter in Text-Feldern der Sheets = Sichern
 document.addEventListener('keydown', (ev) => {
   if (ev.key === 'Enter' && ev.target.id === 'ob-name') { ev.preventDefault(); actions['ob-next'](); return; }
-  if (ev.key === 'Enter' && ev.target.id === 'sub-new') { ev.preventDefault(); addSub(); return; }
   if (ev.key !== 'Enter' || !ui.sheet || ev.target.tagName !== 'INPUT' || ev.target.closest('form')) return;
   ev.preventDefault();
   if (ui.sheet.type === 'todo-editor') saveTodo();

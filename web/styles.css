@@ -499,3 +499,6 @@ button:disabled { cursor: default; }
 .tour-card p { margin: 6px 0 12px; line-height: 1.4; color: var(--text); }
 .tour-actions { display: flex; justify-content: space-between; align-items: center; }
 .btn-primary.small { width: auto; padding: 10px 22px; }
+
+.add-row .add-btn { flex: none; }
+.add-row input:placeholder-shown ~ .add-btn { display: none; }
