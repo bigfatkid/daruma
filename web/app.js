@@ -155,7 +155,7 @@ function weekCount(h, d) {
 function isDone(h, d) {
   const v = getValue(h, d);
   if (h.kind === 'check') return (v ?? 0) >= 1;
-  if (h.kind === 'choice') return (v ?? 0) >= minPick(h);
+  if (h.kind === 'choice') return (v ?? 0) >= 1; // abgehakt wird wie bei Ja/Nein, die Auswahl ist nur die Notiz dazu
   if (h.kind === 'count') return (v ?? 0) >= h.target;
   return v !== undefined && v <= h.target;
 }
@@ -176,8 +176,7 @@ const picksOf = (h, d) => (state.picks || {})[logKey(h, d)] || [];
 function setPicks(h, d, names) {
   const k = logKey(h, d);
   state.picks = state.picks || {};
-  if (names.length) { state.picks[k] = names; state.logs[k] = names.length; }
-  else { delete state.picks[k]; delete state.logs[k]; }
+  if (names.length) state.picks[k] = names; else delete state.picks[k];
 }
 // Wann wurde welche Option zuletzt gewählt (vor dem Tag d)? Name -> Tage her
 function lastPicked(h, d) {
@@ -769,7 +768,7 @@ function habitRow(h, d, future) {
   const steps = state.habitMode === 'steps';
   let controls;
   if (h.kind === 'choice') {
-    controls = `<button class="status-btn" data-action="open-pick" data-id="${h.id}" ${dis} aria-label="Auswählen">${statusCircle(done ? 'done' : 'open')}</button>`;
+    controls = `<button class="status-btn" data-action="toggle-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Abhaken'}">${statusCircle(done ? 'done' : 'open')}</button>`;
   } else if (h.kind === 'check') {
     controls = `<button class="status-btn" data-action="toggle-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Abhaken'}">${statusCircle(done ? 'done' : 'open')}</button>`;
   } else if (h.kind === 'count') {
@@ -1242,7 +1241,7 @@ function renderPickSheet() {
     <div class="card">${extras.map((x) => row(x, 'einmalig')).join('')}${opts.map((o) => row(o.n, agoText(ago[o.n]))).join('')}</div>
     <div style="margin-top:10px">${other}</div>
     ${wk}
-    <button class="btn-primary" style="width:100%;margin-top:16px" data-action="pick-save" ${n || had || (dr.other || '').trim() ? '' : 'disabled'}>${multi ? (n ? `Fertig · ${n} gewählt` : 'Fertig') : 'Abhaken'}</button>
+    <button class="btn-primary" style="width:100%;margin-top:16px" data-action="pick-save" ${n || had || (dr.other || '').trim() ? '' : 'disabled'}>${multi && n ? `Speichern · ${n} gewählt` : 'Speichern'}</button>
     ${had ? '<button class="btn-plain" style="width:100%;margin-top:8px;color:#ff3b30" data-action="pick-clear">Zurücksetzen</button>' : ''}`;
   return sheetShell(h.name, cancelBtn, '', body);
 }
@@ -1834,7 +1833,7 @@ function applyDemoScene(scene) {
     const sport = { ...makeHabit({ name: 'Sport', icon: '🏃', kind: 'choice' }, 1.5), options: ['Laufen', 'Krafttraining', 'Radfahren', 'Yoga', 'Schwimmen'], perWeek: 3, createdAt: addDays(today, -30) };
     const hip = { ...makeHabit({ name: 'Hüftübungen', icon: '🤸', kind: 'choice' }, 1.6), options: ['Taubenpose', 'Seitheben', 'Hip Flexor Stretch', '90/90 Stretch', 'Brücke', 'Clamshells'], multi: true, minPick: 2, target: 2, createdAt: addDays(today, -30) };
     state.habits.push(sport, hip);
-    const put = (h, o, names) => setPicks(h, addDays(today, -o), names);
+    const put = (h, o, names) => { setPicks(h, addDays(today, -o), names); setValue(h, addDays(today, -o), 1); };
     [[1, ['Laufen']], [2, ['Krafttraining']], [6, ['Radfahren']], [9, ['Yoga']], [12, ['Laufen']], [14, ['Klettern']], [16, ['Krafttraining']]].forEach(([o, n]) => put(sport, o, n));
     [[1, ['Brücke', 'Clamshells']], [3, ['90/90 Stretch', 'Brücke']], [4, ['Hip Flexor Stretch', 'Clamshells']], [5, ['Seitheben', 'Brücke']], [8, ['Taubenpose', 'Clamshells']]].forEach(([o, n]) => put(hip, o, n));
     if (scene === 'pick') { ui.sheet = { type: 'pick', id: sport.id }; ui.draft = { sel: [], other: '', otherOpen: false }; }
