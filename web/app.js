@@ -373,7 +373,7 @@ const ui = {
   toast: null,
   wobble: false,
   lastAllDone: {},
-  ob: { step: 0, name: '', habits: [], cfg: {} }, // Einrichtung
+  ob: { step: 0, name: '', habits: [], cfg: {}, questions: ['Wie ist deine Stimmung?', 'Wie viel Energie hast du?', 'Wie gestresst bist du?'] }, // Einrichtung
   tour: null, // App-Tour: Index der Station
   checkin: null, // ungespeicherte Check-in-Antworten { day, values, dirty }
 };
@@ -456,7 +456,7 @@ function render() {
 /* ---------- Einrichtung beim ersten Start ---------- */
 function renderOnboarding() {
   const ob = ui.ob;
-  const steps = 4;
+  const steps = 5;
   const dots = `<div class="ob-dots">${Array.from({ length: steps }, (_, i) => `<i class="${i === ob.step ? 'on' : ''}"></i>`).join('')}</div>`;
   const back = ob.step > 0 ? '<button class="link" data-action="ob-back">Zurück</button>' : '';
   const pick = (on) => statusCircle(on ? 'done' : 'open');
@@ -493,6 +493,12 @@ function renderOnboarding() {
         </div>`;
       }).join('')}`;
     button = 'Weiter';
+  } else if (ob.step === 3) {
+    body = `<h1 class="large-title">Check-in</h1>
+      <p class="ob-lead">Ein paar kurze Fragen, die du einmal am Tag beantwortest. So siehst du mit der Zeit, wie es dir geht. Ein paar Beispiele sind schon ausgewählt, ändern kannst du alles später.</p>
+      ${Q_TYPES.map(([k, l]) => `<h3 class="section-title">${l}</h3><div class="card">${Q_CATALOG.filter((q) => q.type === k).map((q) => `<div class="row"><button class="row-main" data-action="ob-question" data-text="${esc(q.text)}">
+          <span class="emoji">${pic(q.icon)}</span><span class="name" style="flex:1">${esc(q.text)}</span>${pick(ob.questions.includes(q.text))}</button></div>`).join('')}</div>`).join('')}`;
+    button = ob.questions.length ? `Weiter mit ${ob.questions.length} ${ob.questions.length === 1 ? 'Frage' : 'Fragen'}` : 'Ohne Check-in weiter';
   } else {
     body = `<div class="ob-hero ob-done"><div class="daruma done-daruma wobble" data-action="poke">${darumaSVG(true, true)}</div>
       <h1>Alles bereit${ob.name ? `, ${esc(ob.name)}` : ''}!</h1>
@@ -518,6 +524,7 @@ function finishOnboarding() {
     const tpl = f.noGoal ? { ...t, kind: 'check', target: 1, step: 1, unit: '' } : { ...t, target, step };
     state.habits.push({ ...makeHabit(tpl, nextOrder(state.habits)), ...freqValues(f), catchUp: !!f.catchUp });
   });
+  state.checkinQuestions = Q_CATALOG.filter((q) => ob.questions.includes(q.text)).map((q) => ({ id: uid(), ...q }));
   state.name = ob.name.trim();
   state.setupDone = true;
   ui.tab = 'today'; ui.day = todayKey(); ui.tour = 0;
@@ -1229,11 +1236,12 @@ const actions = {
   'ob-next'() {
     const ob = ui.ob;
     if (ob.step === 0) { const f = document.getElementById('ob-name'); ob.name = f ? f.value.trim() : ''; }
-    if (ob.step >= 3) return finishOnboarding();
+    if (ob.step >= 4) return finishOnboarding();
     ob.step += ob.step === 1 && !ob.habits.length ? 2 : 1; // ohne Habits kein Feinschliff
     window.scrollTo(0, 0); render();
   },
   'ob-back'() { const ob = ui.ob; ob.step = Math.max(0, ob.step - (ob.step === 3 && !ob.habits.length ? 2 : 1)); window.scrollTo(0, 0); render(); },
+  'ob-question'(el) { const ob = ui.ob, t = el.dataset.text; ob.questions = ob.questions.includes(t) ? ob.questions.filter((x) => x !== t) : [...ob.questions, t]; render(); },
   'ob-toggle'(el) { const f = ui.ob.cfg[el.dataset.name]; f[el.dataset.key] = !f[el.dataset.key]; render(); },
   'ob-habit'(el) {
     const ob = ui.ob, n = el.dataset.name;
