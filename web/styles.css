@@ -670,3 +670,6 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .opt-input:focus { color: var(--accent); }
 .hab-row.goal-met .row-main, .hab-row.goal-met .controls { opacity: .55; }
 .hab-row.goal-met .row-main, .hab-row.goal-met .controls { opacity: .55; }
+/* Name nie abschneiden, lieber die kleine Schrift kürzen */
+.hab-row.one-line .name-wrap .name { flex: none; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hab-row.one-line .name-wrap .tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
