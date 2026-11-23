@@ -23,12 +23,13 @@ struct HabitRow: View {
                 .frame(width: 32)
 
             Text(habit.name)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+                .lineLimit(2)
+                .layoutPriority(0)
 
             Spacer(minLength: 8)
 
             controls
+                .layoutPriority(1)
         }
         .padding(.vertical, 6)
         .sensoryFeedback(.success, trigger: done) { _, newValue in newValue }
@@ -60,12 +61,12 @@ struct HabitRow: View {
             .accessibilityLabel(done ? "Erledigt, antippen zum Zurücksetzen" : "Abhaken")
 
         case .count:
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Text("\(value.short)/\(habit.target.short) \(habit.unit)")
                     .font(.subheadline)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .fixedSize()
 
                 StepButton(systemImage: "minus") {
                     habit.setValue(max(0, value - habit.step), on: day, in: context)
