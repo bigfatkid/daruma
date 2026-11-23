@@ -790,11 +790,10 @@ function habitRow(h, d, future) {
     </button>`;
   }
   const picked = h.kind === 'choice' ? picksOf(h, d) : [];
-  const sub = [
+  const sub = ([
     h.kind === 'choice' ? (picked.length ? picked.join(', ') : h.multi && minPick(h) > 1 ? `mind. ${minPick(h)}` : '') : '',
     h.kind === 'count' ? (steps ? `${num(v)}/${num(h.target)} ${esc(h.unit)}` : `${num(h.target)} ${esc(h.unit)}`) : h.kind === 'limit' && (!steps || getValue(h, d) === undefined) ? `max. ${num(h.target)} ${esc(h.unit)}` : '',
-    isWeekly(h) ? `Woche: ${weekCount(h, d)}/${h.perWeek}${weekCount(h, d) >= h.perWeek ? ' ✓' : ''}` : '',
-  ].filter(Boolean).join(' · ');
+  ].filter(Boolean).join(' · ') + (isWeekly(h) ? ` (${weekCount(h, d)}/${h.perWeek}${weekCount(h, d) >= h.perWeek ? ' ✓' : ''})` : '')).trim();
   const label = sub
     ? `<span class="name-wrap"><span class="name">${esc(h.name)}</span><span class="tag">${sub}</span></span>`
     : `<span class="name">${esc(h.name)}</span>`;
