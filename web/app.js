@@ -38,7 +38,7 @@ const CATALOG = [
     { name: 'Sport', icon: '🏃', kind: 'count', target: 30, step: 10, unit: 'min' },
     { name: 'Dehnen', icon: '🤸', kind: 'count', target: 10, step: 5, unit: 'min' },
     { name: 'Obst oder Gemüse', icon: '🥕', kind: 'count', target: 400, step: 100, unit: 'g' },
-    { name: 'Schlafen', icon: '🛏️', kind: 'count', target: 8, step: 0.5, unit: 'h' },
+    { name: 'Schlafdauer', icon: '🛏️', kind: 'count', target: 8, step: 0.5, unit: 'h' },
   ] },
   { name: 'Geist', items: [
     { name: 'Lesen', icon: '📖', kind: 'count', target: 10, step: 5, unit: 'Seiten' },
