@@ -504,3 +504,30 @@ button:disabled { cursor: default; }
 .add-row input:placeholder-shown ~ .add-btn { display: none; }
 .ob-restore { text-align: center; margin: 36px 0 0; }
 .ob-restore label { color: var(--secondary); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 8px; }
+
+/* ---------- Module ---------- */
+.modules { margin-top: 20px; display: flex; flex-direction: column; gap: 12px; }
+.quote-card { padding: 14px 16px 14px; }
+.module-label { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--secondary); }
+.quote { margin: 8px 0 6px; font-size: 17px; line-height: 1.4; font-style: italic; }
+.quote-by { font-size: 13px; color: var(--secondary); }
+.quote-by::before { content: '– '; }
+.checkin-q { padding: 12px; }
+.scale { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+.scale button { height: 38px; border-radius: 9px; background: var(--fill); font-size: 15px; font-weight: 600; }
+.scale button.on { background: var(--accent); color: #fff; }
+.scale-legend { display: flex; justify-content: space-between; font-size: 12px; color: var(--secondary); padding: 6px 2px 0; }
+textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 1.4; display: block; }
+.memory { padding: 12px 16px; }
+.memory p { margin: 6px 0 0; line-height: 1.4; white-space: pre-wrap; }
+.module-row { display: flex; align-items: center; gap: 4px; padding-right: 10px; }
+.module-row + .module-row { border-top: 0.5px solid var(--separator); }
+.module-row .toggle-row { flex: 1; padding: 6px 4px 6px 14px; }
+.toggle-row > span:first-child { display: flex; align-items: center; gap: 12px; }
+.toggle-row .name-wrap { display: flex; flex-direction: column; }
+.card > .toggle-row:has(.name-wrap) { padding-top: 8px; padding-bottom: 8px; }
+.q-input { width: 100% !important; text-align: left !important; color: var(--text) !important; }
+.bars { margin-left: 0; display: flex; align-items: flex-end; gap: 3px; height: 34px; margin-top: 8px; }
+.bars i { flex: 1; background: var(--fill); border-radius: 3px; min-height: 3px; }
+.bars i.on { background: var(--accent); opacity: .85; }
+.value.chosen { color: var(--accent); font-weight: 600; }
