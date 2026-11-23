@@ -27,7 +27,7 @@ Alle Daten bleiben auf dem iPhone. Kein Konto, kein Server.
 
 Du brauchst: Mac mit Xcode (aus dem App Store), dein iPhone und ein USB-Kabel.
 
-1. **Projekt holen:** Xcode öffnen → *Clone Git Repository…* (oder Menü *Integrate → Clone…*) → `https://github.com/bigfatkid/daruma_app` eingeben → Ordner wählen → *Clone*.
+1. **Projekt holen:** Xcode öffnen → *Clone Git Repository…* (oder Menü *Integrate → Clone…*) → `https://github.com/bigfatkid/daruma` eingeben → Ordner wählen → *Clone*.
 2. **Projekt öffnen:** Falls es nicht automatisch aufgeht, `Daruma.xcodeproj` doppelklicken.
 3. **Signieren:** Links ganz oben auf das blaue Symbol *Daruma* klicken → Reiter *Signing & Capabilities* → bei *Team* deine Apple-ID auswählen (falls keine da ist: *Add an Account…*).
    - Meldet Xcode, dass die *Bundle Identifier* schon vergeben ist, hänge einfach etwas an, z.B. `com.bigfatkid.daruma.matti`.

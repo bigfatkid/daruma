@@ -313,7 +313,6 @@ function renderOnboarding() {
       <p>Daruma hilft dir, Habits, To-Dos und Projekte im Blick zu behalten. Schaffst du alle Habits eines Tages, bekommt Daruma sein zweites Auge.</p></div>
       <h3 class="section-title">Wie heißt du?</h3>
       <input class="field" id="ob-name" value="${esc(ob.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name" enterkeyhint="next">
-      <p class="section-footer">Bleibt nur auf diesem Gerät.</p>
       <p class="ob-restore"><label>Daten wiederherstellen<input type="file" accept="application/json,.json" data-action="import" hidden></label></p>`;
     button = 'Los geht’s';
   } else if (ob.step === 1) {
