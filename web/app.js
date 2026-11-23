@@ -30,29 +30,30 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0);
 
 /* ---------- Katalog ---------- */
+// Namen ohne Mengen. Mengen stehen immer im Ziel (bearbeitbar), Ja/Nein-Habits haben keins.
 const CATALOG = [
   { name: 'Körper', items: [
     { name: 'Wasser trinken', icon: '💧', kind: 'count', target: 3, step: 0.5, unit: 'L' },
     { name: 'Schritte', icon: '🚶', kind: 'count', target: 10000, step: 1000, unit: 'Schritte' },
-    { name: 'Sport', icon: '🏃', kind: 'check' },
-    { name: '10 Minuten Dehnen', icon: '🤸', kind: 'check' },
+    { name: 'Sport', icon: '🏃', kind: 'count', target: 30, step: 10, unit: 'min' },
+    { name: 'Dehnen', icon: '🤸', kind: 'count', target: 10, step: 5, unit: 'min' },
     { name: 'Obst oder Gemüse', icon: '🥕', kind: 'count', target: 400, step: 100, unit: 'g' },
     { name: 'Vor 23 Uhr ins Bett', icon: '🛏️', kind: 'check' },
     { name: 'Kein Kaffee nach 14 Uhr', icon: '☕', kind: 'check' },
   ] },
   { name: 'Geist', items: [
-    { name: '10 Seiten lesen', icon: '📖', kind: 'check' },
-    { name: 'Etwas Neues lernen', icon: '🧠', kind: 'check' },
+    { name: 'Lesen', icon: '📖', kind: 'count', target: 10, step: 5, unit: 'Seiten' },
+    { name: 'Etwas Neues lernen', icon: '🧠', kind: 'count', target: 15, step: 5, unit: 'min' },
     { name: 'Morgens den Tag planen', icon: '🗒️', kind: 'check' },
     { name: 'Bildschirmzeit', icon: '⏳', kind: 'limit', target: 90, step: 1, unit: 'min' },
     { name: 'Kein Handy im Bett', icon: '📵', kind: 'check' },
-    { name: '5 Minuten aufräumen', icon: '✨', kind: 'check' },
+    { name: 'Aufräumen', icon: '✨', kind: 'count', target: 5, step: 5, unit: 'min' },
   ] },
   { name: 'Seele', items: [
-    { name: 'Meditieren', icon: '🧘', kind: 'check' },
+    { name: 'Meditieren', icon: '🧘', kind: 'count', target: 10, step: 5, unit: 'min' },
     { name: 'Journaling', icon: '✍️', kind: 'check' },
-    { name: '3 Dinge, für die ich dankbar bin', icon: '🙏', kind: 'check' },
-    { name: 'Spaziergang ohne Handy', icon: '🍃', kind: 'check' },
+    { name: 'Dankbarkeit', icon: '🙏', kind: 'count', target: 3, step: 1, unit: 'Dinge' },
+    { name: 'Spaziergang ohne Handy', icon: '🍃', kind: 'count', target: 20, step: 10, unit: 'min' },
     { name: 'Bei Freunden oder Familie melden', icon: '💬', kind: 'check' },
   ] },
 ];
@@ -69,8 +70,8 @@ const HABIT_ICONS = ['✅', '💧', '🧘', '📖', '🚶', '🏃', '🤸', '�
 const LIST_ICONS = ['📦', '🏠', '📚', '🔨', '✈️', '🛒', '🎁', '🎬', '🍳', '💪', '💡', '🎵',
   '🌱', '🎨', '⭐', '❤️', '📷', '🎮'];
 const KIND_TEXT = {
-  check: 'Einmal antippen, dann ist es für heute erledigt.',
-  count: 'Du zählst hoch, bis das Ziel erreicht ist, z.B. 3 L Wasser in 0,5-L-Schritten.',
+  check: 'Ja oder nein: einmal antippen, dann ist es für heute erledigt.',
+  count: 'Mit Ziel und Einheit, z.B. 10 Seiten oder 3 L. Mit + und − zählst du hoch, ein Tipp auf den Namen hakt es ganz ab.',
   limit: 'Du trägst abends einen Wert ein. Erledigt, wenn er im Limit bleibt, z.B. Bildschirmzeit.',
 };
 const WEEKDAYS = [[1, 'Mo'], [2, 'Di'], [3, 'Mi'], [4, 'Do'], [5, 'Fr'], [6, 'Sa'], [0, 'So']];
@@ -287,12 +288,12 @@ function renderOnboarding() {
       <p class="ob-lead">Was willst du dir jeden Tag angewöhnen? Wähle ein paar aus. Die Ziele sind nur Vorschläge, du kannst sie direkt anpassen. Ergänzen und ändern geht später im Reiter Habits.</p>
       ${CATALOG.map((c) => `<h3 class="section-title">${esc(c.name)}</h3><div class="card">${c.items.map((t) => {
         const on = ob.habits.includes(t.name);
-        const goal = t.kind === 'count' ? `${num(t.target)} ${t.unit}` : t.kind === 'limit' ? `max. ${num(t.target)} ${t.unit}` : '';
+        const goal = goalText(t);
         const tune = on && t.kind !== 'check'
           ? `<label class="form-row ob-tune"><span>${t.kind === 'count' ? 'Dein Ziel pro Tag' : 'Höchstens pro Tag'}</span>
               <span class="tune-input"><input data-ob-target="${esc(t.name)}" inputmode="decimal" value="${esc(ob.targets[t.name] ?? num(t.target))}"> ${esc(t.unit)}</span></label>` : '';
         return `<div class="row"><button class="row-main" data-action="ob-habit" data-name="${esc(t.name)}">
-          <span class="emoji">${t.icon}</span><span class="name" style="flex:1">${esc(t.name)}</span>${goal && !on ? `<span class="value">${esc(goal)}</span>` : ''}${pick(on)}</button></div>${tune}`;
+          <span class="emoji">${t.icon}</span><span class="name" style="flex:1">${esc(t.name)}</span>${!on || t.kind === 'check' ? `<span class="value">${esc(goal)}</span>` : ''}${pick(on)}</button></div>${tune}`;
       }).join('')}</div>`).join('')}`;
     button = ob.habits.length ? `Weiter mit ${ob.habits.length} Habit${ob.habits.length === 1 ? '' : 's'}` : 'Ohne Habits weiter';
   } else if (ob.step === 2) {
@@ -451,8 +452,8 @@ function habitRow(h, d, future) {
     </button>`;
   }
   return `<div class="row">
-    ${h.kind === 'check' && !future
-      ? `<button class="row-main" data-action="toggle-habit" data-id="${h.id}"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span></button>`
+    ${h.kind !== 'limit' && !future
+      ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span></button>`
       : `<div class="row-main"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span></div>`}
     <div class="controls">${controls}</div>
   </div>`;
@@ -469,7 +470,7 @@ function scheduleText(h) {
 function goalText(h) {
   if (h.kind === 'count') return `${num(h.target)} ${h.unit}`.trim();
   if (h.kind === 'limit') return `max. ${num(h.target)} ${h.unit}`.trim();
-  return '';
+  return 'Ja/Nein';
 }
 
 function renderHabits() {
@@ -645,7 +646,7 @@ function renderSheet() {
     const names = new Set(state.habits.map((h) => h.name));
     const body = `<div class="card" style="margin-top:6px"><div class="row"><button class="row-main" data-action="habit-from" data-name=""><span class="emoji">➕</span><span class="name" style="color:var(--accent)">Eigenes Habit erstellen</span></button></div></div>
       ${CATALOG.map((c) => `<h3 class="section-title">${esc(c.name)}</h3><div class="card">${c.items.map((t) => `<div class="row"><button class="row-main" data-action="habit-from" data-name="${esc(t.name)}">
-        <span class="emoji">${t.icon}</span><span class="name" style="flex:1">${esc(t.name)}</span>${names.has(t.name) ? '<span class="value">Schon dabei</span>' : ''}
+        <span class="emoji">${t.icon}</span><span class="name" style="flex:1">${esc(t.name)}</span><span class="value">${names.has(t.name) ? 'Schon dabei' : esc(goalText(t))}</span>
         <svg class="chevron" viewBox="0 0 8 14">${ICON.right.replace(/<\/?svg[^>]*>/g, '')}</svg></button></div>`).join('')}</div>`).join('')}`;
     return sheetShell('Habit hinzufügen', cancelBtn, '', body);
   }
@@ -657,7 +658,7 @@ function renderSheet() {
       <input class="field" id="habit-name" data-field="name" value="${esc(dr.name)}" placeholder="z.B. Meditieren" autocomplete="off">
       <h3 class="section-title">Art</h3>
       <div class="card">
-        <div class="segmented">${[['check', 'Abhaken'], ['count', 'Zählen'], ['limit', 'Limit']].map(([k, l]) => `<button class="${dr.kind === k ? 'on' : ''}" data-action="set-kind" data-kind="${k}">${l}</button>`).join('')}</div>
+        <div class="segmented">${[['check', 'Ja/Nein'], ['count', 'Mit Ziel'], ['limit', 'Limit']].map(([k, l]) => `<button class="${dr.kind === k ? 'on' : ''}" data-action="set-kind" data-kind="${k}">${l}</button>`).join('')}</div>
         <div class="hint">${KIND_TEXT[dr.kind]}</div>
       </div>
       ${dr.kind !== 'check' ? `<h3 class="section-title">${dr.kind === 'count' ? 'Ziel' : 'Limit'}</h3>
@@ -881,6 +882,7 @@ const actions = {
   poke(el) { el.classList.remove('wobble'); void el.offsetWidth; el.classList.add('wobble'); },
 
   'toggle-habit'(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, isDone(h, ui.day) ? 0 : 1); commit(); },
+  'fill-habit'(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, isDone(h, ui.day) ? 0 : h.target); commit(); },
   step(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, Math.max(0, valueOf(h, ui.day) + Number(el.dataset.dir) * h.step)); commit(); },
   'limit-entry'(el) { openSheet({ type: 'limit-entry', id: el.dataset.id }, null, '#limit-value'); },
   'clear-limit'() { const h = habitById(ui.sheet.id); delete state.logs[logKey(h, ui.day)]; ui.sheet = null; commit(); },
@@ -1030,7 +1032,7 @@ setInterval(checkNewDay, 60 * 1000);
 function demoState(scene) {
   const today = todayKey();
   const s = { version: 1, name: 'Matti', setupDone: true, habits: [], logs: {}, todos: [], lists: [] };
-  const tpls = [...STARTER, findTemplate('10 Minuten Dehnen'), findTemplate('10 Seiten lesen')];
+  const tpls = [...STARTER, findTemplate('Dehnen'), findTemplate('Lesen')];
   tpls.forEach((t, i) => {
     const h = makeHabit(t, i);
     h.createdAt = addDays(today, -30);
@@ -1040,7 +1042,7 @@ function demoState(scene) {
       s.logs[`${h.id}|${addDays(today, -o)}`] = h.kind === 'check' ? 1 : h.kind === 'count' ? h.target : (o % 2 === 0 ? 70 : 110);
     }
   });
-  const vals = scene === 'alldone' ? [1, 3, 75, 1, 1] : [1, 1.5, undefined, 1, undefined];
+  const vals = scene === 'alldone' ? [10, 3, 75, 10, 10] : [10, 1.5, undefined, 5, undefined];
   vals.forEach((v, i) => { if (v !== undefined) s.logs[`${s.habits[i].id}|${today}`] = v; });
 
   const lists = [
