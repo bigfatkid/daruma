@@ -185,6 +185,7 @@ const ICON = {
   right: '<svg viewBox="0 0 8 14"><path d="m1 1 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   sun: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="13" cy="13" r="4.6"/><path d="M13 2.5v2.6M13 20.9v2.6M2.5 13h2.6M20.9 13h2.6M5.6 5.6l1.8 1.8M18.6 18.6l1.8 1.8M5.6 20.4l1.8-1.8M18.6 7.4l1.8-1.8"/></svg>',
   tray: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3.5 14.5 6.5 5h13l3 9.5V21H3.5z"/><path d="M3.5 14.5h6a3.5 3.5 0 0 0 7 0h6"/></svg>',
+  loop: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5V11a5 5 0 0 1 5-5h12"/><path d="m17.5 2.5 3.5 3.5-3.5 3.5"/><path d="M22 13.5V15a5 5 0 0 1-5 5H5"/><path d="m8.5 23.5-3.5-3.5 3.5-3.5"/></svg>',
   chart: '<svg viewBox="0 0 26 26" fill="currentColor"><rect x="3.5" y="13" width="5" height="9" rx="1.5"/><rect x="10.5" y="8" width="5" height="14" rx="1.5"/><rect x="17.5" y="4" width="5" height="18" rx="1.5"/></svg>',
 };
 
@@ -239,7 +240,7 @@ function weekRing(progress, selected, future) {
 const app = document.getElementById('app');
 
 function render() {
-  const screen = ui.tab === 'today' ? renderToday() : ui.tab === 'pool' ? renderPool() : renderProgress();
+  const screen = ui.tab === 'today' ? renderToday() : ui.tab === 'habits' ? renderHabits() : ui.tab === 'pool' ? renderPool() : renderProgress();
   app.innerHTML = `<main class="screen">${screen}</main>${renderTabbar()}${renderSheet()}${ui.toast ? `<div class="toast">${esc(ui.toast)}</div>` : ''}`;
   ui.wobble = false;
   if (ui.focus) {
@@ -251,7 +252,7 @@ function render() {
 
 function renderTabbar() {
   const tab = (id, label, icon) => `<button class="tab ${ui.tab === id ? 'active' : ''}" data-action="tab" data-tab="${id}">${icon}<span>${label}</span></button>`;
-  return `<nav class="tabbar">${tab('today', 'Heute', ICON.sun)}${tab('pool', 'Pool', ICON.tray)}${tab('progress', 'Fortschritt', ICON.chart)}</nav>`;
+  return `<nav class="tabbar">${tab('today', 'Heute', ICON.sun)}${tab('habits', 'Habits', ICON.loop)}${tab('pool', 'Pool', ICON.tray)}${tab('progress', 'Fortschritt', ICON.chart)}</nav>`;
 }
 
 function dayTitle(d, today) {
@@ -286,7 +287,7 @@ function renderToday() {
   return `
     <header class="nav">
       <div class="nav-side">${d !== today ? '<button class="link" data-action="go-today">Zu heute</button>' : ''}</div>
-      <div class="nav-side right"><button class="icon-btn" data-action="open-add" aria-label="Hinzufügen">${ICON.plus}</button></div>
+      <div class="nav-side right"><button class="icon-btn" data-action="new-todo" aria-label="To-Do hinzufügen">${ICON.plus}</button></div>
     </header>
     <h1 class="large-title">${esc(dayTitle(d, today))}</h1>
 
@@ -306,7 +307,7 @@ function renderToday() {
 
     <h3 class="section-title">Habits</h3>
     <div class="card">
-      ${habits.length ? habits.map((h) => habitRow(h, d, future)).join('') : '<p class="empty">An diesem Tag stehen keine Habits an. Tippe oben auf +, um eins anzulegen.</p>'}
+      ${habits.length ? habits.map((h) => habitRow(h, d, future)).join('') : (state.habits.length ? '<p class="empty">An diesem Tag stehen keine Habits an.</p>' : '<p class="empty">Noch keine Habits. <button class="link" data-action="tab" data-tab="habits">Im Reiter Habits anlegen</button></p>')}
     </div>
 
     <h3 class="section-title">To-Dos</h3>
@@ -360,9 +361,53 @@ function habitRow(h, d, future) {
     </button>`;
   }
   return `<div class="row">
-    <button class="row-main" data-action="edit-habit" data-id="${h.id}"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span></button>
+    ${h.kind === 'check' && !future
+      ? `<button class="row-main" data-action="toggle-habit" data-id="${h.id}"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span></button>`
+      : `<div class="row-main"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span></div>`}
     <div class="controls">${controls}</div>
   </div>`;
+}
+
+function scheduleText(h) {
+  const w = h.weekdays;
+  if (w.length === 7) return 'Täglich';
+  if (w.length === 5 && [1, 2, 3, 4, 5].every((n) => w.includes(n))) return 'Mo–Fr';
+  if (w.length === 2 && w.includes(0) && w.includes(6)) return 'Wochenende';
+  return WEEKDAYS.filter(([n]) => w.includes(n)).map(([, l]) => l).join(', ');
+}
+
+function goalText(h) {
+  if (h.kind === 'count') return `${num(h.target)} ${h.unit}`.trim();
+  if (h.kind === 'limit') return `max. ${num(h.target)} ${h.unit}`.trim();
+  return '';
+}
+
+function renderHabits() {
+  const habits = [...state.habits].sort(byOrder);
+  const head = `<header class="nav"><div class="nav-side"></div>
+    <div class="nav-side right"><button class="icon-btn" data-action="open-catalog" aria-label="Habit hinzufügen">${ICON.plus}</button></div></header>
+    <h1 class="large-title">Habits</h1>`;
+  if (!habits.length) {
+    return `${head}<div class="card empty-state">
+      <div class="big">🔁</div>
+      <h2>Noch keine Habits</h2>
+      <p>Such dir etwas aus dem Katalog aus oder leg ein eigenes Habit an. Abgehakt wird dann im Reiter Heute.</p>
+      <button class="btn-primary" data-action="open-catalog">Habit hinzufügen</button>
+    </div>`;
+  }
+  return `${head}
+    <div class="card">${habits.map((h, i) => `<div class="row">
+      <button class="row-main" data-action="edit-habit" data-id="${h.id}">
+        <span class="emoji">${h.icon}</span>
+        <span class="name-wrap"><span class="name">${esc(h.name)}</span><span class="tag">${esc([goalText(h), scheduleText(h)].filter(Boolean).join(' · '))}</span></span>
+      </button>
+      <div class="controls order-btns">
+        <button class="step" data-action="move-habit" data-id="${h.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Nach oben">↑</button>
+        <button class="step" data-action="move-habit" data-id="${h.id}" data-dir="1" ${i === habits.length - 1 ? 'disabled' : ''} aria-label="Nach unten">↓</button>
+      </div>
+    </div>`).join('')}</div>
+    <p class="section-footer">Tippe auf ein Habit, um es zu bearbeiten. Mit den Pfeilen legst du die Reihenfolge auf Heute fest.</p>
+    <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="open-catalog"><span class="emoji">➕</span><span class="name" style="color:var(--accent)">Habit hinzufügen</span></button></div></div>`;
 }
 
 function todoRow(t, today, future) {
@@ -783,6 +828,14 @@ const actions = {
     ui.draft.weekdays = w.includes(n) ? w.filter((x) => x !== n) : [...w, n];
     render();
   },
+  'move-habit'(el) {
+    const list = [...state.habits].sort(byOrder);
+    const i = list.findIndex((h) => h.id === el.dataset.id), j = i + Number(el.dataset.dir);
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    list.forEach((h, n) => { h.order = n; });
+    commit();
+  },
   'set-icon'(el) { ui.draft.icon = el.dataset.icon; render(); },
   'save-habit'() { saveHabit(); },
   'delete-habit'() {
@@ -913,6 +966,8 @@ function applyDemoScene(scene) {
   if (scene === 'poollist') { ui.tab = 'pool'; ui.poolListId = state.lists[0].id; }
   if (scene === 'surprise') { ui.tab = 'pool'; ui.sheet = { type: 'surprise', id: state.todos[6].id }; }
   if (scene === 'progress') ui.tab = 'progress';
+  if (scene === 'habits') ui.tab = 'habits';
+  if (scene === 'catalog' || scene === 'editor') ui.tab = 'habits';
   if (scene === 'catalog') ui.sheet = { type: 'catalog' };
   if (scene === 'editor') { ui.sheet = { type: 'habit-editor' }; ui.draft = habitDraft(state.habits[1]); }
   if (scene === 'todo') { ui.sheet = { type: 'todo-editor' }; ui.draft = { ...todoDraft(null), title: 'Zahnarzttermin machen', when: 'tomorrow' }; }
