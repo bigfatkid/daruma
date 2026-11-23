@@ -117,6 +117,7 @@ function normalize(s) {
     checkinQuestions: Array.isArray(s.checkinQuestions) && (s.checkinV2 || (Array.isArray(s.modules) && s.modules.some((m) => m.id === 'checkin' && m.on))) ? s.checkinQuestions.filter((q) => q.type === 'scale') : [],
     checkins: s.checkins && typeof s.checkins === 'object' ? s.checkins : {},
     collapsed: s.collapsed && typeof s.collapsed === 'object' ? s.collapsed : {},
+    habitMode: s.habitMode === 'steps' ? 'steps' : 'whole',
   };
 }
 function load() {
@@ -376,6 +377,9 @@ function renderSettingsSheet() {
   const body = `
     <h3 class="section-title">Dein Name</h3>
     <input class="field" id="settings-name" data-setting="name" value="${esc(state.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name">
+    <h3 class="section-title">Habits mit Ziel abhaken</h3>
+    <div class="segmented">${[['whole', 'Ganz oder gar nicht'], ['steps', 'Schritt für Schritt']].map(([k, l]) => `<button class="${(state.habitMode || 'whole') === k ? 'on' : ''}" data-action="habit-mode" data-mode="${k}">${l}</button>`).join('')}</div>
+    <p class="section-footer">${(state.habitMode || 'whole') === 'steps' ? 'Mit − und + zählst du nach und nach hoch, z.B. jedes Glas Wasser.' : 'Ein Tipp auf den Kreis hakt das ganze Ziel ab. Ruhiger und schneller.'}</p>
     <h3 class="section-title">Deine Daten</h3>
     <div class="card">
       <div class="row"><button class="row-main" data-action="export"><span class="emoji">${pic('💾')}</span><span class="name">Sicherung herunterladen</span></button></div>
@@ -695,13 +699,16 @@ function habitRow(h, d, future) {
   const done = isDone(h, d);
   const v = valueOf(h, d);
   const dis = future ? 'disabled' : '';
+  const steps = state.habitMode === 'steps';
   let controls;
   if (h.kind === 'check') {
     controls = `<button class="status-btn" data-action="toggle-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Abhaken'}">${statusCircle(done ? 'done' : 'open')}</button>`;
   } else if (h.kind === 'count') {
-    controls = `<button class="step" data-action="step" data-id="${h.id}" data-dir="-1" ${v <= 0 || future ? 'disabled' : ''} aria-label="Weniger">−</button>
+    // Einstellung: "whole" = ganz oder gar nicht (Standard), "steps" = Schritt für Schritt mit − / +
+    controls = steps ? `<button class="step" data-action="step" data-id="${h.id}" data-dir="-1" ${v <= 0 || future ? 'disabled' : ''} aria-label="Weniger">−</button>
       <button class="step" data-action="step" data-id="${h.id}" data-dir="1" ${dis} aria-label="Mehr">+</button>
-      <button class="status-btn" data-action="fill-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Ganz erledigt'}">${statusCircle(done ? 'done' : 'open', v / h.target)}</button>`;
+      <button class="status-btn" data-action="fill-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Ganz erledigt'}">${statusCircle(done ? 'done' : 'open', v / h.target)}</button>`
+      : `<button class="status-btn" data-action="fill-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Erledigt'}">${statusCircle(done ? 'done' : 'open')}</button>`;
   } else {
     const has = getValue(h, d) !== undefined;
     controls = `<button class="limit-btn" data-action="limit-entry" data-id="${h.id}" ${dis}>
@@ -710,7 +717,7 @@ function habitRow(h, d, future) {
     </button>`;
   }
   const sub = [
-    h.kind === 'count' ? `${num(v)}/${num(h.target)} ${esc(h.unit)}` : h.kind === 'limit' && getValue(h, d) === undefined ? `max. ${num(h.target)} ${esc(h.unit)}` : '',
+    h.kind === 'count' ? (steps ? `${num(v)}/${num(h.target)} ${esc(h.unit)}` : `${num(h.target)} ${esc(h.unit)}`) : h.kind === 'limit' && getValue(h, d) === undefined ? `max. ${num(h.target)} ${esc(h.unit)}` : '',
     isWeekly(h) ? `${weekCount(h, d)}/${h.perWeek} diese Woche` : '',
   ].filter(Boolean).join(' · ');
   const label = sub
@@ -1337,6 +1344,7 @@ const actions = {
     commit();
   },
   'open-settings'() { openSheet({ type: 'settings' }); },
+  'habit-mode'(el) { state.habitMode = el.dataset.mode; commit(); },
   routines(el) { ui.routines = el.dataset.seg; render(); },
   'open-q-catalog'() { openSheet({ type: 'q-catalog' }); },
   'question-pick'(el) {
