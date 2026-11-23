@@ -654,3 +654,15 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .swipe { transition: transform .15s ease; }
 .swipe.dragging { transition: none; z-index: 5; box-shadow: 0 8px 24px rgba(90, 60, 30, .18); border-radius: 12px; }
 .swipe.dragging .swipe-row { border-radius: 12px; }
+
+/* Auswahl-Habits */
+.pick-lead { color: var(--secondary); font-size: 15px; margin: 4px 4px 12px; }
+.pick-row .row-main { width: 100%; }
+.pick-row .controls { margin-left: auto; }
+.pick-other { padding: 14px 16px; }
+.pick-other-title { font-weight: 600; margin-bottom: 8px; }
+.pick-other .field { margin: 0; }
+.pick-other-hint { font-size: 13px; color: var(--secondary); margin: 8px 0 0; }
+.pick-other .add-btn { margin-top: 10px; }
+.pick-stats { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: -2px; }
+.pick-stats b { font-weight: 600; color: var(--text); }

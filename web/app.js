@@ -76,6 +76,7 @@ const KIND_TEXT = {
   check: 'Ja oder nein: einmal antippen, dann ist es für heute erledigt.',
   count: 'Mit Ziel und Einheit, z.B. 10 Seiten oder 3 L. Mit + und − zählst du hoch, ein Tipp auf den Namen hakt es ganz ab.',
   limit: 'Du trägst abends einen Wert ein. Erledigt, wenn er im Limit bleibt, z.B. Bildschirmzeit.',
+  choice: 'Beim Abhaken wählst du aus, was du gemacht hast, z.B. welche Sportart. Was am längsten her ist, steht oben.',
 };
 const WEEKDAYS = [[1, 'Mo'], [2, 'Di'], [3, 'Mi'], [4, 'Do'], [5, 'Fr'], [6, 'Sa'], [0, 'So']];
 
@@ -95,7 +96,7 @@ const rollsOver = () => true;
 function freshState() {
   return { version: 1, name: '', setupDone: false, catchUpV2: true, habits: [], logs: {}, todos: [], lists: [], ...moduleDefaults() };
 }
-const moduleDefaults = () => ({ stepV2: true, checkinV2: true, checkinQuestions: [], checkins: {} });
+const moduleDefaults = () => ({ stepV2: true, checkinV2: true, checkinQuestions: [], checkins: {}, picks: {} });
 function normalize(s) {
   // Einmalig: Standard für "Habits nachholen" ist jetzt aus. Kurz zuvor gesetzte Werte zurücksetzen.
   if (!s.catchUpV2 && Array.isArray(s.habits)) s.habits.forEach((h) => { delete h.catchUp; });
@@ -118,6 +119,7 @@ function normalize(s) {
     checkins: s.checkins && typeof s.checkins === 'object' ? s.checkins : {},
     collapsed: s.collapsed && typeof s.collapsed === 'object' ? s.collapsed : {},
     habitMode: s.habitMode === 'steps' ? 'steps' : 'whole',
+    picks: s.picks && typeof s.picks === 'object' ? s.picks : {}, // Auswahl-Habits: was an dem Tag gewählt wurde
   };
 }
 function load() {
@@ -153,6 +155,7 @@ function weekCount(h, d) {
 function isDone(h, d) {
   const v = getValue(h, d);
   if (h.kind === 'check') return (v ?? 0) >= 1;
+  if (h.kind === 'choice') return (v ?? 0) >= minPick(h);
   if (h.kind === 'count') return (v ?? 0) >= h.target;
   return v !== undefined && v <= h.target;
 }
@@ -164,6 +167,46 @@ function setValue(h, d, v) {
 function deleteHabit(id) {
   state.habits = state.habits.filter((h) => h.id !== id);
   for (const k of Object.keys(state.logs)) if (k.startsWith(id + '|')) delete state.logs[k];
+  for (const k of Object.keys(state.picks || {})) if (k.startsWith(id + '|')) delete state.picks[k];
+}
+
+/* ---------- Auswahl-Habits (z.B. Sport: Yoga, Laufen, ...) ---------- */
+const minPick = (h) => (h.multi ? Math.max(1, h.minPick || 1) : 1);
+const picksOf = (h, d) => (state.picks || {})[logKey(h, d)] || [];
+function setPicks(h, d, names) {
+  const k = logKey(h, d);
+  state.picks = state.picks || {};
+  if (names.length) { state.picks[k] = names; state.logs[k] = names.length; }
+  else { delete state.picks[k]; delete state.logs[k]; }
+}
+// Wann wurde welche Option zuletzt gewählt (vor dem Tag d)? Name -> Tage her
+function lastPicked(h, d) {
+  const last = {};
+  for (const [k, names] of Object.entries(state.picks || {})) {
+    const [id, day] = k.split('|');
+    if (id !== h.id || day >= d) continue;
+    names.forEach((n) => { if (!last[n] || day > last[n]) last[n] = day; });
+  }
+  const ago = {};
+  for (const [n, day] of Object.entries(last)) ago[n] = Math.round((parseDay(d) - parseDay(day)) / 864e5);
+  return ago;
+}
+const agoText = (n) => (n === undefined ? 'noch nie' : n === 1 ? 'zuletzt gestern' : n === 2 ? 'zuletzt vorgestern' : `zuletzt vor ${n} Tagen`);
+function pickStats(h, days) {
+  const from = addDays(todayKey(), -(days - 1)), count = {};
+  for (const [k, names] of Object.entries(state.picks || {})) {
+    const [id, day] = k.split('|');
+    if (id === h.id && day >= from) names.forEach((n) => { count[n] = (count[n] || 0) + 1; });
+  }
+  return Object.entries(count).sort((a, b) => b[1] - a[1]);
+}
+// x-mal pro Woche: steht jeden Tag bei den Habits, bis das Wochenziel erreicht ist
+function weeklyShows(h, d) {
+  if (!isWeekly(h) || h.createdAt > d) return false;
+  if (isDone(h, d)) return true;
+  let n = 0;
+  for (let k = weekStart(d); k < d; k = addDays(k, 1)) if (k >= h.createdAt && isDone(h, k)) n++;
+  return n < h.perWeek;
 }
 function weekStreak(h) {
   const today = todayKey();
@@ -621,13 +664,15 @@ function renderToday() {
   const today = todayKey();
   const d = ui.day;
   const future = d > today;
-  const habits = state.habits.filter((h) => isActive(h, d)).sort(byOrder);
+  const habits = state.habits.filter((h) => isActive(h, d) || weeklyShows(h, d)).sort(byOrder);
   const todos = state.todos
     .filter((t) => todoAppears(t, d, today))
     .sort((a, b) => (!!a.completedAt - !!b.completedAt) || byOrder(a, b));
-  // Für das zweite Auge zählen Habits und To-Dos des Tages (Mattis Wunsch)
-  const done = habits.filter((h) => isDone(h, d)).length + todos.filter((t) => t.completedAt).length;
-  const total = habits.length + todos.length;
+  // Für das zweite Auge zählen Habits und To-Dos des Tages (Mattis Wunsch).
+  // Wochen-Habits blockieren das Auge nicht: sie zählen nur an Tagen, an denen sie erledigt wurden.
+  const counted = habits.filter((h) => !isWeekly(h) || isDone(h, d));
+  const done = counted.filter((h) => isDone(h, d)).length + todos.filter((t) => t.completedAt).length;
+  const total = counted.length + todos.length;
   const allDone = total > 0 && done === total;
 
   // Wackeln, wenn gerade alles erledigt wurde
@@ -639,7 +684,6 @@ function renderToday() {
   if (ui.lastDone[d] !== undefined && done > ui.lastDone[d]) ui.wobble = true;
   ui.lastDone[d] = done;
 
-  const weekly = state.habits.filter((h) => isWeekly(h) && h.createdAt <= addDays(weekStart(d), 6)).sort(byOrder);
   const yesterday = addDays(today, -1);
   const catchUp = d === today
     ? state.habits.filter((h) => catchesUp(h) && h.kind !== 'limit' && isActive(h, yesterday) && !isDone(h, yesterday)).sort(byOrder) : [];
@@ -671,8 +715,6 @@ function renderToday() {
       ${habits.length ? habits.map((h) => habitRow(h, d, future)).join('') : (state.habits.length ? '<p class="empty">An diesem Tag stehen keine Habits an.</p>' : '<p class="empty">Noch keine Habits. <button class="link" data-action="tab" data-tab="habits">Im Reiter Routinen anlegen</button></p>')}
     </div>`}
 
-    ${weekly.length ? `${sectionHead('week', 'Diese Woche', isFolded('week'), `${weekly.length} Habits`)}
-    ${isFolded('week') ? '' : `<div class="card">${weekly.map((h) => habitRow(h, d, future)).join('')}</div>`}` : ''}
 
     ${catchUp.length ? `<h3 class="section-title">Von gestern offen</h3>
     <div class="card">${catchUp.map((h) => `<div class="row"><div class="row-main"><span class="emoji">${pic(h.icon)}</span><span class="name">${esc(h.name)}</span></div>
@@ -693,7 +735,7 @@ function renderToday() {
 }
 
 function dayProgress(k, today) {
-  const active = state.habits.filter((h) => isActive(h, k));
+  const active = state.habits.filter((h) => isActive(h, k) || (isWeekly(h) && h.createdAt <= k && isDone(h, k)));
   const dayTodos = state.todos.filter((t) => todoAppears(t, k, today));
   const n = active.length + dayTodos.length;
   const done = active.filter((h) => isDone(h, k)).length + dayTodos.filter((t) => t.completedAt).length;
@@ -722,7 +764,9 @@ function habitRow(h, d, future) {
   const dis = future ? 'disabled' : '';
   const steps = state.habitMode === 'steps';
   let controls;
-  if (h.kind === 'check') {
+  if (h.kind === 'choice') {
+    controls = `<button class="status-btn" data-action="open-pick" data-id="${h.id}" ${dis} aria-label="Auswählen">${statusCircle(done ? 'done' : 'open')}</button>`;
+  } else if (h.kind === 'check') {
     controls = `<button class="status-btn" data-action="toggle-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Abhaken'}">${statusCircle(done ? 'done' : 'open')}</button>`;
   } else if (h.kind === 'count') {
     // Einstellung: "whole" = ganz oder gar nicht (Standard), "steps" = Schritt für Schritt mit − / +
@@ -740,7 +784,9 @@ function habitRow(h, d, future) {
         : `<span class="accent-text">Eintragen</span>${statusCircle('open')}`}
     </button>`;
   }
+  const picked = h.kind === 'choice' ? picksOf(h, d) : [];
   const sub = [
+    h.kind === 'choice' ? (picked.length ? picked.join(', ') : h.multi && minPick(h) > 1 ? `mind. ${minPick(h)}` : '') : '',
     h.kind === 'count' ? (steps ? `${num(v)}/${num(h.target)} ${esc(h.unit)}` : `${num(h.target)} ${esc(h.unit)}`) : h.kind === 'limit' && (!steps || getValue(h, d) === undefined) ? `max. ${num(h.target)} ${esc(h.unit)}` : '',
     isWeekly(h) ? `${weekCount(h, d)}/${h.perWeek} diese Woche` : '',
   ].filter(Boolean).join(' · ');
@@ -750,7 +796,7 @@ function habitRow(h, d, future) {
   const stamp = done ? '<svg class="picto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>' : pic(h.icon);
   return `<div class="row hab-row ${steps ? '' : 'one-line'} ${done ? 'is-done' : ''}">
     ${(h.kind !== 'limit' || !steps) && !future
-      ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : h.kind === 'limit' ? 'toggle-limit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${stamp}</span>${label}</button>`
+      ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : h.kind === 'choice' ? 'open-pick' : h.kind === 'limit' ? 'toggle-limit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${stamp}</span>${label}</button>`
       : `<div class="row-main"><span class="emoji">${stamp}</span>${label}</div>`}
     <div class="controls">${controls}</div>
   </div>`;
@@ -768,6 +814,7 @@ function scheduleText(h) {
 function goalText(h) {
   if (h.kind === 'count') return `${num(h.target)} ${h.unit}`.trim();
   if (h.kind === 'limit') return `max. ${num(h.target)} ${h.unit}`.trim();
+  if (h.kind === 'choice') return `Auswahl aus ${(h.options || []).length}${h.multi && minPick(h) > 1 ? `, mind. ${minPick(h)}` : ''}`;
   return 'Ja/Nein';
 }
 
@@ -896,6 +943,7 @@ function renderProgress() {
     return `<div class="stat">
       <div class="stat-head"><span class="emoji">${pic(h.icon)}</span><span class="name">${esc(h.name)}</span><span class="streak">${s > 0 ? `🔥 ${s} ${isWeekly(h) ? (s === 1 ? 'Woche' : 'Wochen') : (s === 1 ? 'Tag' : 'Tage')}` : ''}</span></div>
       <div class="stat-sub">Woche ${w === null ? '–' : w + ' %'} · 30 Tage ${m === null ? '–' : m + ' %'}</div>
+      ${h.kind === 'choice' && pickStats(h, 30).length ? `<div class="stat-sub pick-stats">${pickStats(h, 30).map(([n, c]) => `<span>${esc(n)} <b>${c}×</b></span>`).join('')}</div>` : ''}
       <div class="dots">${dots.join('')}</div>
     </div>`;
   }).join('');
@@ -956,10 +1004,25 @@ function renderSheet() {
       <input class="field" id="habit-name" data-field="name" value="${esc(dr.name)}" placeholder="z.B. Meditieren" autocomplete="off">
       <h3 class="section-title">Art</h3>
       <div class="card">
-        <div class="segmented">${[['check', 'Ja/Nein'], ['count', 'Mit Ziel'], ['limit', 'Limit']].map(([k, l]) => `<button class="${dr.kind === k ? 'on' : ''}" data-action="set-kind" data-kind="${k}">${l}</button>`).join('')}</div>
+        <div class="segmented">${[['check', 'Ja/Nein'], ['count', 'Mit Ziel'], ['limit', 'Limit'], ['choice', 'Auswahl']].map(([k, l]) => `<button class="${dr.kind === k ? 'on' : ''}" data-action="set-kind" data-kind="${k}">${l}</button>`).join('')}</div>
         <div class="hint">${KIND_TEXT[dr.kind]}</div>
       </div>
-      ${dr.kind !== 'check' ? `<h3 class="section-title">${dr.kind === 'count' ? 'Ziel' : 'Limit'}</h3>
+      ${dr.kind === 'choice' ? `<h3 class="section-title">Optionen</h3>
+      <div class="card">
+        ${dr.options.map((o, i) => `<div class="row"><span class="row-main"><span class="name">${esc(o)}</span></span>
+          <div class="controls"><button class="small-link" data-action="opt-del" data-i="${i}" aria-label="Entfernen">✕</button></div></div>`).join('')}
+        <form class="row add-row" data-form="add-opt"><span class="plus">+</span><input id="opt-new" placeholder="z.B. Yoga, Laufen, Schwimmen" autocomplete="off" enterkeyhint="done">
+          <button class="pill add-btn" type="submit">Hinzufügen</button></form>
+      </div>
+      <div class="card" style="margin-top:12px">
+        ${toggleRow('Mehrere auswählbar', dr.multi, 'data-action="draft-toggle" data-key="multi"')}
+        ${dr.multi ? `<div class="form-row"><span>Mindestens</span><span class="controls">
+          <button class="step" data-action="min-pick" data-dir="-1" ${dr.minPick <= 1 ? 'disabled' : ''} aria-label="Weniger">−</button>
+          <span class="value" style="min-width:34px;text-align:center">${dr.minPick}</span>
+          <button class="step" data-action="min-pick" data-dir="1" ${dr.minPick >= Math.max(1, dr.options.length) ? 'disabled' : ''} aria-label="Mehr">+</button></span></div>` : ''}
+      </div>
+      <p class="section-footer">Beim Abhaken kannst du auch einmalig etwas anderes eintragen. Das kommt nicht dauerhaft in die Liste.</p>` : ''}
+      ${dr.kind !== 'check' && dr.kind !== 'choice' ? `<h3 class="section-title">${dr.kind === 'count' ? 'Ziel' : 'Limit'}</h3>
       <div class="card">
         <label class="form-row"><span>${dr.kind === 'count' ? 'Ziel pro Tag' : 'Höchstens'}</span><input data-field="target" inputmode="decimal" value="${esc(dr.target)}"></label>
         ${dr.kind === 'count' ? `<label class="form-row"><span>Pro Tipp</span><input data-field="step" inputmode="decimal" value="${esc(dr.step)}"></label>` : ''}
@@ -1023,6 +1086,7 @@ function renderSheet() {
       `<button class="link" style="font-weight:600" data-action="save-list">${isNew ? 'Anlegen' : 'Sichern'}</button>`, body);
   }
 
+  if (s.type === 'pick') return renderPickSheet();
   if (s.type === 'limit-entry') {
     const h = habitById(s.id);
     if (!h) return '';
@@ -1086,19 +1150,23 @@ function habitDraft(h, template) {
     freq: h && isWeekly(h) ? 'week' : h && h.weekdays.length < 7 ? 'days' : 'daily',
     perWeek: h && isWeekly(h) ? h.perWeek : 3,
     catchUp: h ? catchesUp(h) : false,
+    options: [...(src.options || [])], multi: !!src.multi, minPick: src.minPick || 1,
   };
 }
 
 function saveHabit() {
   const dr = ui.draft;
   const name = (dr.name || '').trim();
-  const target = dr.kind === 'check' ? 1 : parseNum(dr.target);
+  if (dr.kind === 'choice') addOption();
+  const target = dr.kind === 'check' || dr.kind === 'choice' ? 1 : parseNum(dr.target);
   const step = dr.kind === 'count' ? parseNum(dr.step) : 1;
   if (!name) return fail('Bitte gib dem Habit einen Namen.');
+  if (dr.kind === 'choice' && !dr.options.length) return fail('Bitte lege mindestens eine Option an, z.B. Yoga.');
   if (dr.kind !== 'check' && !(target > 0)) return fail('Bitte gib einen Zielwert größer als 0 ein.');
   if (dr.kind === 'count' && !(step > 0)) return fail('Bitte gib eine Schrittweite größer als 0 ein.');
   if (dr.freq === 'days' && !dr.weekdays.length) return fail('Wähle mindestens einen Wochentag.');
   const values = { name, icon: dr.icon, kind: dr.kind, target, step, unit: (dr.unit || '').trim(), ...freqValues(dr), catchUp: dr.catchUp };
+  if (dr.kind === 'choice') Object.assign(values, { options: dr.options, multi: dr.multi, minPick: dr.multi ? Math.min(dr.minPick, dr.options.length) : 1, unit: '' });
   if (dr.id) Object.assign(habitById(dr.id), values);
   else state.habits.push({ ...makeHabit(values, nextOrder(state.habits)), ...values });
   ui.sheet = null; ui.draft = null;
@@ -1123,6 +1191,59 @@ function freqPicker(f, attrs) {
 }
 
 function fail(message) { ui.draft.error = message; render(); }
+
+function addOption() {
+  const input = document.getElementById('opt-new');
+  const v = input ? input.value.trim() : '';
+  if (!v) return false;
+  if (!ui.draft.options.some((o) => o.toLowerCase() === v.toLowerCase())) ui.draft.options.push(v);
+  ui.draft.error = null;
+  return true;
+}
+
+/* Auswahlblatt: was hast du heute gemacht? Am längsten her steht oben. */
+function renderPickSheet() {
+  const h = habitById(ui.sheet.id), dr = ui.draft;
+  if (!h) return '';
+  const d = ui.day, ago = lastPicked(h, d), multi = h.multi;
+  const opts = [...(h.options || [])].map((n, i) => ({ n, i, a: ago[n] ?? Infinity }))
+    .sort((x, y) => (y.a - x.a) || (x.i - y.i));
+  const extras = dr.sel.filter((n) => !(h.options || []).includes(n));
+  const box = (on) => `<span class="todo-box ${on ? 'on' : ''}">${on ? '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>' : ''}</span>`;
+  const chev = `<svg class="chevron" viewBox="0 0 8 14">${ICON.right.replace(/<\/?svg[^>]*>/g, '')}</svg>`;
+  const row = (n, tag) => {
+    const on = dr.sel.includes(n);
+    return `<div class="row pick-row ${on ? 'on' : ''}"><button class="row-main" data-action="pick" data-name="${esc(n)}">
+      <span class="name-wrap"><span class="name">${esc(n)}</span><span class="tag">${esc(tag)}</span></span>
+      <span class="controls">${multi ? box(on) : on ? statusCircle('done') : chev}</span></button></div>`;
+  };
+  const dayWord = d === todayKey() ? 'heute' : 'an diesem Tag';
+  const lead = multi ? `Was hast du ${dayWord} gemacht?${minPick(h) > 1 ? ` Mindestens ${minPick(h)}.` : ''}` : `Was hast du ${dayWord} gemacht? Am längsten her steht oben.`;
+  const other = dr.otherOpen
+    ? `<form class="card pick-other" data-form="pick-other">
+        <div class="pick-other-title">${multi ? 'Noch etwas anderes' : `Etwas anderes`}</div>
+        <input class="field" id="pick-other" data-field="other" value="${esc(dr.other || '')}" placeholder="z.B. Klettern" autocomplete="off" enterkeyhint="done">
+        <p class="pick-other-hint">Zählt ${dayWord} für ${esc(h.name)}. Taucht im Verlauf auf, kommt aber nicht dauerhaft in die Auswahl.</p>
+        ${multi ? '<button class="pill add-btn" type="submit">Hinzufügen</button>' : ''}
+      </form>`
+    : `<div class="card"><div class="row"><button class="row-main" data-action="pick-other-open"><span class="name-wrap"><span class="name" style="color:var(--accent)">+ Andere …</span><span class="tag">einmalig eintragen</span></span></button></div></div>`;
+  const wk = isWeekly(h) ? `<p class="section-footer">${esc(h.name)}: ${h.perWeek}× pro Woche · diese Woche ${weekCount(h, d)} von ${h.perWeek}</p>` : '';
+  const had = picksOf(h, d).length > 0;
+  const n = dr.sel.length;
+  const body = `<p class="pick-lead">${lead}</p>
+    <div class="card">${extras.map((x) => row(x, 'einmalig')).join('')}${opts.map((o) => row(o.n, agoText(ago[o.n]))).join('')}</div>
+    <div style="margin-top:10px">${other}</div>
+    ${wk}
+    ${multi ? `<button class="btn-primary" style="width:100%;margin-top:16px" data-action="pick-save" ${n || had ? '' : 'disabled'}>${n ? `Fertig · ${n} gewählt` : 'Fertig'}</button>`
+      : dr.otherOpen ? '<button class="btn-primary" style="width:100%;margin-top:16px" data-action="pick-save">Abhaken</button>' : ''}
+    ${had ? '<button class="btn-plain" style="width:100%;margin-top:8px;color:#ff3b30" data-action="pick-clear">Zurücksetzen</button>' : ''}`;
+  return sheetShell(h.name, cancelBtn, '', body);
+}
+function savePicks(names) {
+  const h = habitById(ui.sheet.id);
+  setPicks(h, ui.day, [...new Set(names.map((x) => x.trim()).filter(Boolean))]);
+  ui.sheet = null; ui.draft = null; commit();
+}
 
 function todoDraft(t) {
   const today = todayKey();
@@ -1322,6 +1443,25 @@ const actions = {
     if (!ob.cfg[n]) { const t = findTemplate(n); ob.cfg[n] = { target: t.kind === 'check' ? '' : num(t.target), freq: 'daily', weekdays: [1, 2, 3, 4, 5], perWeek: 3 }; }
     render();
   },
+  'open-pick'(el) {
+    const h = habitById(el.dataset.id);
+    openSheet({ type: 'pick', id: h.id }, { sel: [...picksOf(h, ui.day)], other: '', otherOpen: false });
+  },
+  pick(el) {
+    const h = habitById(ui.sheet.id), n = el.dataset.name, dr = ui.draft;
+    if (!h.multi) return savePicks([n]);
+    dr.sel = dr.sel.includes(n) ? dr.sel.filter((x) => x !== n) : [...dr.sel, n];
+    render();
+  },
+  'pick-other-open'() { ui.draft.otherOpen = true; ui.focus = '#pick-other'; render(); },
+  'pick-save'() {
+    const h = habitById(ui.sheet.id), dr = ui.draft, other = (dr.other || '').trim();
+    if (!h.multi) { if (!other) { ui.focus = '#pick-other'; return render(); } return savePicks([other]); }
+    savePicks(other ? [...dr.sel, other] : dr.sel);
+  },
+  'pick-clear'() { savePicks([]); },
+  'opt-del'(el) { ui.draft.options.splice(Number(el.dataset.i), 1); ui.draft.minPick = Math.max(1, Math.min(ui.draft.minPick, ui.draft.options.length)); render(); },
+  'min-pick'(el) { const dr = ui.draft; dr.minPick = Math.max(1, Math.min(Math.max(1, dr.options.length), dr.minPick + Number(el.dataset.dir))); render(); },
   'draft-toggle'(el) { ui.draft[el.dataset.key] = !ui.draft[el.dataset.key]; render(); },
   'set-icon'(el) { ui.draft.icon = el.dataset.icon; render(); },
   'save-habit'() { saveHabit(); },
@@ -1367,7 +1507,7 @@ const actions = {
   fold(el) {
     const k = el.dataset.key;
     if (k === 'habits') {
-      const hs = state.habits.filter((h) => isActive(h, ui.day));
+      const hs = state.habits.filter((h) => isActive(h, ui.day) || weeklyShows(h, ui.day));
       const now = !habitsFolded(ui.day, hs);
       ui.habFold = ui.habFold || {}; ui.habFold[ui.day] = now;
       state.collapsed = state.collapsed || {};
@@ -1563,6 +1703,15 @@ document.addEventListener('submit', (ev) => {
   const form = ev.target;
   ev.preventDefault();
   if (form.dataset.form === 'add-sub') { addSub(); return; }
+  if (form.dataset.form === 'add-opt') { if (addOption()) { ui.focus = '#opt-new'; render(); } return; }
+  if (form.dataset.form === 'pick-other') {
+    const dr = ui.draft, v = (dr.other || '').trim();
+    if (!v) return;
+    if (!habitById(ui.sheet.id).multi) return savePicks([v]);
+    if (!dr.sel.includes(v)) dr.sel.push(v);
+    dr.other = ''; dr.otherOpen = false; render();
+    return;
+  }
   if (form.dataset.form === 'add-todo') {
     const input = form.querySelector('input');
     const title = input.value.trim();
@@ -1673,6 +1822,18 @@ function applyDemoScene(scene) {
   if (scene === 'routinescheckin') { ui.tab = 'habits'; ui.routines = 'checkin'; }
   if (scene === 'checkinhome') ui.tab = 'today';
   if (scene === 'checkin') ui.sheet = { type: 'checkin' };
+  if (/^(choice|pick|multipick|choiceedit|choicestats)$/.test(scene)) {
+    const sport = { ...makeHabit({ name: 'Sport', icon: '🏃', kind: 'choice' }, 1.5), options: ['Laufen', 'Krafttraining', 'Radfahren', 'Yoga', 'Schwimmen'], perWeek: 3, createdAt: addDays(today, -30) };
+    const hip = { ...makeHabit({ name: 'Hüftübungen', icon: '🤸', kind: 'choice' }, 1.6), options: ['Taubenpose', 'Seitheben', 'Hip Flexor Stretch', '90/90 Stretch', 'Brücke', 'Clamshells'], multi: true, minPick: 2, target: 2, createdAt: addDays(today, -30) };
+    state.habits.push(sport, hip);
+    const put = (h, o, names) => setPicks(h, addDays(today, -o), names);
+    [[1, ['Laufen']], [2, ['Krafttraining']], [6, ['Radfahren']], [9, ['Yoga']], [12, ['Laufen']], [14, ['Klettern']], [16, ['Krafttraining']]].forEach(([o, n]) => put(sport, o, n));
+    [[1, ['Brücke', 'Clamshells']], [3, ['90/90 Stretch', 'Brücke']], [4, ['Hip Flexor Stretch', 'Clamshells']], [5, ['Seitheben', 'Brücke']], [8, ['Taubenpose', 'Clamshells']]].forEach(([o, n]) => put(hip, o, n));
+    if (scene === 'pick') { ui.sheet = { type: 'pick', id: sport.id }; ui.draft = { sel: [], other: '', otherOpen: false }; }
+    if (scene === 'multipick') { ui.sheet = { type: 'pick', id: hip.id }; ui.draft = { sel: ['Taubenpose'], other: '', otherOpen: false }; }
+    if (scene === 'choiceedit') { ui.tab = 'habits'; ui.sheet = { type: 'habit-editor' }; ui.draft = habitDraft(hip); }
+    if (scene === 'choicestats') ui.tab = 'progress';
+  }
 }
 
 /* ---------- Start ---------- */
