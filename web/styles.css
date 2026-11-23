@@ -673,3 +673,4 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 /* Name nie abschneiden, lieber die kleine Schrift kürzen */
 .hab-row.one-line .name-wrap .name { flex: none; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hab-row.one-line .name-wrap .tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.hab-row.one-line.multi-picked .name-wrap .name { white-space: normal; max-width: none; flex: 1 1 auto; line-height: 1.25; padding: 4px 0; }

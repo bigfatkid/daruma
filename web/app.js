@@ -791,7 +791,7 @@ function habitRow(h, d, future) {
   }
   const picked = h.kind === 'choice' ? picksOf(h, d) : [];
   // Nach der Auswahl steht die gewählte Option statt des Habit-Namens da (Matti), bei mehreren „+N“
-  const shown = picked.length ? picked[0] + (picked.length > 1 ? ` +${picked.length - 1}` : '') : h.name;
+  const shown = picked.length ? picked.join(', ') : h.name;
   const sub = ([
     h.kind === 'choice' && !picked.length && h.multi && minPick(h) > 1 ? `mind. ${minPick(h)}` : '',
     h.kind === 'count' ? (steps ? `${num(v)}/${num(h.target)} ${esc(h.unit)}` : `${num(h.target)} ${esc(h.unit)}`) : h.kind === 'limit' && (!steps || getValue(h, d) === undefined) ? `max. ${num(h.target)} ${esc(h.unit)}` : '',
@@ -800,7 +800,7 @@ function habitRow(h, d, future) {
     ? `<span class="name-wrap"><span class="name">${esc(shown)}</span><span class="tag">${sub}</span></span>`
     : `<span class="name">${esc(shown)}</span>`;
   const stamp = done ? '<svg class="picto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>' : pic(h.icon);
-  return `<div class="row hab-row ${steps ? '' : 'one-line'} ${done ? 'is-done' : ''} ${goalMet(h, d) ? 'goal-met' : ''}">
+  return `<div class="row hab-row ${steps ? '' : 'one-line'} ${done ? 'is-done' : ''} ${goalMet(h, d) ? 'goal-met' : ''} ${picked.length > 1 ? 'multi-picked' : ''}">
     ${(h.kind !== 'limit' || !steps) && !future
       ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : h.kind === 'choice' ? 'open-pick' : h.kind === 'limit' ? 'toggle-limit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${stamp}</span>${label}</button>`
       : `<div class="row-main"><span class="emoji">${stamp}</span>${label}</div>`}
