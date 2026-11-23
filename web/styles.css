@@ -648,3 +648,9 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .m-day.selected { background: var(--accent); }
 .m-day.selected span { color: #fff; }
 .m-day.future { color: var(--secondary); opacity: .6; }
+/* Sortieren per Griff (v50) */
+.drag-handle { width: 36px; height: 44px; display: grid; place-items: center; color: var(--secondary); opacity: .7; touch-action: none; flex: none; margin-right: -6px; }
+.drag-handle svg { width: 20px; height: 20px; }
+.swipe { transition: transform .15s ease; }
+.swipe.dragging { transition: none; z-index: 5; box-shadow: 0 8px 24px rgba(90, 60, 30, .18); border-radius: 12px; }
+.swipe.dragging .swipe-row { border-radius: 12px; }

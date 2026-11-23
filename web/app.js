@@ -300,6 +300,9 @@ function ciFolded(d) {
   return Object.keys(checkinFor(d)).length > 0 && !checkinDraft(d).dirty;
 }
 
+// Griff zum Sortieren per Ziehen
+const dragHandle = (kind) => `<span class="drag-handle" data-drag="${kind}" aria-label="Zum Sortieren ziehen" role="button"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>`;
+
 // Zeile, die sich nach links wischen lässt und dann einen Mülleimer zeigt
 function swipeRow(kind, id, inner) {
   return `<div class="swipe" data-swipe="${kind}" data-id="${id}"><button class="swipe-del" data-action="swipe-del" data-kind="${kind}" data-id="${id}" aria-label="Löschen" tabindex="-1">${pic('🗑️')}</button><div class="row swipe-row">${inner}</div></div>`;
@@ -311,10 +314,7 @@ function renderQuestionList() {
   return `${qs.length ? `<div class="card">${qs.map((q, i) => swipeRow('question', q.id, `
       <button class="row-main" data-action="edit-question" data-id="${q.id}"><span class="emoji">${pic(q.icon || '❓')}</span>
         <span class="name-wrap"><span class="name">${esc(q.text)}</span><span class="tag">${qTypeLabel(q.type)}</span></span></button>
-      <div class="controls order-btns">
-        <button class="step" data-action="q-move" data-id="${q.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Nach oben">↑</button>
-        <button class="step" data-action="q-move" data-id="${q.id}" data-dir="1" ${i === qs.length - 1 ? 'disabled' : ''} aria-label="Nach unten">↓</button>
-      </div>`)).join('')}</div>` : ''}
+      ${qs.length > 1 ? dragHandle('question') : ''}`)).join('')}</div>` : ''}
     <p class="section-footer">${qs.length ? 'Die Fragen beantwortest du täglich auf Heute.' : 'Kurze Fragen zu deinem Tag, z.B. Stimmung oder Schlaf. Sobald du eine auswählst, erscheint der Check-in auf Heute.'}</p>
     <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="open-q-catalog"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Frage hinzufügen</span></button></div></div>`;
 }
@@ -792,11 +792,8 @@ function renderHabits() {
         <span class="emoji">${pic(h.icon)}</span>
         <span class="name-wrap"><span class="name">${esc(h.name)}</span><span class="tag">${esc([goalText(h), scheduleText(h)].filter(Boolean).join(' · '))}</span></span>
       </button>
-      <div class="controls order-btns">
-        <button class="step" data-action="move-habit" data-id="${h.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Nach oben">↑</button>
-        <button class="step" data-action="move-habit" data-id="${h.id}" data-dir="1" ${i === habits.length - 1 ? 'disabled' : ''} aria-label="Nach unten">↓</button>
-      </div>`)).join('')}</div>
-    <p class="section-footer">Tippe auf ein Habit, um es zu bearbeiten. Nach links wischen zum Löschen. Mit den Pfeilen legst du die Reihenfolge auf Heute fest.</p>
+      ${habits.length > 1 ? dragHandle('habit') : ''}`)).join('')}</div>
+    <p class="section-footer">Tippe auf ein Habit, um es zu bearbeiten. Nach links wischen zum Löschen. Am Griff rechts festhalten und ziehen, um die Reihenfolge auf Heute zu ändern.</p>
     <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="open-catalog"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Habit hinzufügen</span></button></div></div>`;
 }
 
@@ -1436,6 +1433,47 @@ function closeOpenSwipe() {
   if (openSwipe && openSwipe.isConnected) setSwipeX(openSwipe, 0, true);
   openSwipe = null;
 }
+// Sortieren per Ziehen am Griff (Routinen)
+let drag = null;
+function dragStart(handle, y) {
+  const item = handle.closest('.swipe');
+  const items = [...item.parentElement.querySelectorAll(':scope > .swipe')];
+  drag = { kind: handle.dataset.drag, item, items, from: items.indexOf(item), to: items.indexOf(item), y0: y, h: item.offsetHeight };
+  item.classList.add('dragging');
+}
+function dragMove(y) {
+  const dy = y - drag.y0;
+  const to = Math.max(0, Math.min(drag.items.length - 1, drag.from + Math.round(dy / drag.h)));
+  drag.to = to;
+  drag.item.style.transform = `translateY(${dy}px)`;
+  drag.items.forEach((el, i) => {
+    if (el === drag.item) return;
+    let shift = 0;
+    if (drag.from < to && i > drag.from && i <= to) shift = -drag.h;
+    if (drag.from > to && i < drag.from && i >= to) shift = drag.h;
+    el.style.transform = shift ? `translateY(${shift}px)` : '';
+  });
+}
+function dragEnd() {
+  const { kind, items, from, to } = drag;
+  drag = null;
+  swallowClick = true;
+  const ids = items.map((el) => el.dataset.id);
+  const [moved] = ids.splice(from, 1); ids.splice(to, 0, moved);
+  if (kind === 'habit') ids.forEach((id, n) => { const h = habitById(id); if (h) h.order = n; });
+  else state.checkinQuestions.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+  commit();
+}
+document.addEventListener('touchstart', (ev) => {
+  const hd = ev.target.closest('.drag-handle');
+  if (!hd || ev.touches.length !== 1) return;
+  ev.preventDefault();
+  dragStart(hd, ev.touches[0].clientY);
+}, { passive: false });
+document.addEventListener('touchmove', (ev) => { if (drag) { ev.preventDefault(); dragMove(ev.touches[0].clientY); } }, { passive: false });
+document.addEventListener('touchend', () => { if (drag) dragEnd(); });
+document.addEventListener('touchcancel', () => { if (drag) { drag = null; render(); } });
+
 let weekSwipe = null;
 document.addEventListener('touchstart', (ev) => {
   const w = ev.target.closest('[data-swipe-week]');
@@ -1449,6 +1487,7 @@ document.addEventListener('touchend', (ev) => {
 });
 document.addEventListener('touchstart', (ev) => {
   const row = ev.target.closest('.swipe-row');
+  if (ev.target.closest('.drag-handle')) { swipe = null; return; }
   if (openSwipe && !openSwipe.isConnected) openSwipe = null;
   if (openSwipe && row !== openSwipe && !ev.target.closest('.swipe-del')) { closeOpenSwipe(); swallowClick = true; swipe = null; return; }
   if (!row || ev.touches.length !== 1) { swipe = null; return; }
