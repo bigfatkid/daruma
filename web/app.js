@@ -219,15 +219,15 @@ function darumaSVG(bothEyes, popEye) {
       <path d="M12 74a17 17 0 0 0 13 18" fill="none" stroke="#f2bd40" stroke-width="3" stroke-linecap="round"/>
       <path d="M88 74a17 17 0 0 1-13 18" fill="none" stroke="#f2bd40" stroke-width="3" stroke-linecap="round"/>
       <ellipse cx="50" cy="42" rx="32" ry="27" fill="#fffaf0" stroke="#f2bd40" stroke-width="3"/>
-      <path d="M28 27.5Q36 19 45 30" fill="none" stroke="#1a1717" stroke-width="4" stroke-linecap="round"/>
-      <path d="M72 27.5Q64 19 55 30" fill="none" stroke="#1a1717" stroke-width="4" stroke-linecap="round"/>
+      <path d="M29 26Q37 21 45 25" fill="none" stroke="#1a1717" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M71 26Q63 21 55 25" fill="none" stroke="#1a1717" stroke-width="3.5" stroke-linecap="round"/>
       <circle cx="37" cy="39" r="9.3" fill="#fff" stroke="#000" stroke-width="2"/>
       <circle cx="63" cy="39" r="9.3" fill="#fff" stroke="#000" stroke-width="2"/>
       <g><circle cx="37" cy="39" r="5.4" fill="#000"/><circle cx="39" cy="37" r="1.7" fill="#fff"/></g>
       ${bothEyes ? `<g class="pupil2${popEye ? ' pop' : ''}"><circle cx="63" cy="39" r="5.4" fill="#000"/><circle cx="65" cy="37" r="1.7" fill="#fff"/></g>` : ''}
-      <path d="M35 51Q41.5 59 50 54.5 58.5 59 65 51" fill="none" stroke="#1a1717" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-      <circle cx="25" cy="51" r="4" fill="#ff8aa0" opacity=".45"/>
-      <circle cx="75" cy="51" r="4" fill="#ff8aa0" opacity=".45"/>
+      <path d="M41 53Q50 59 59 53" fill="none" stroke="#1a1717" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="25" cy="51" r="4" fill="#ff8aa0" opacity=".5"/>
+      <circle cx="75" cy="51" r="4" fill="#ff8aa0" opacity=".5"/>
       <rect x="35" y="83" width="30" height="12" rx="6" fill="#f2bd40" stroke="#bf851a" stroke-width="1.5"/>
     </g>
   </svg>`;
