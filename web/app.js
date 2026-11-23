@@ -59,11 +59,6 @@ const CATALOG = [
 ];
 const findTemplate = (name) => CATALOG.flatMap((c) => c.items).find((t) => t.name === name);
 const STARTER = ['Meditieren', 'Wasser trinken', 'Bildschirmzeit'].map(findTemplate);
-const LIST_SUGGESTIONS = [
-  { name: 'Haushalt', icon: '🏠' }, { name: 'Projekte', icon: '🔨' }, { name: 'Ausflüge & Reisen', icon: '✈️' },
-  { name: 'Bücher', icon: '📚' }, { name: 'Filme & Serien', icon: '🎬' }, { name: 'Rezepte zum Ausprobieren', icon: '🍳' },
-  { name: 'Einkaufen & Besorgungen', icon: '🛒' }, { name: 'Geschenkideen', icon: '🎁' },
-];
 
 const HABIT_ICONS = ['✅', '💧', '🧘', '📖', '🚶', '🏃', '🤸', '🦵', '🙏', '🍃', '🛏️', '📵',
   '☕', '⏳', '✨', '🗒️', '💊', '🥕', '🎵', '💪', '🌙', '☀️', '✍️', '🧠', '💬'];
@@ -206,6 +201,7 @@ function todoAppears(t, d, today) {
   return t.plannedDay === d;
 }
 const inPool = (t, today) => !!t.listId && !t.completedAt && (!t.plannedDay || t.plannedDay < today);
+const subsText = (t) => (t.subs && t.subs.length ? `${t.subs.filter((x) => x.done).length}/${t.subs.length} Schritte` : '');
 const carriedOver = (t, today) => state.settings.todoRollover && !t.listId && !t.completedAt && t.plannedDay && t.plannedDay < today;
 const listById = (id) => state.lists.find((l) => l.id === id);
 const todoById = (id) => state.todos.find((t) => t.id === id);
@@ -223,7 +219,7 @@ const ui = {
   toast: null,
   wobble: false,
   lastAllDone: {},
-  ob: { step: 0, name: '', habits: [], lists: [], cfg: {}, settings: { ...DEFAULT_SETTINGS } }, // Einrichtung
+  ob: { step: 0, name: '', habits: [], cfg: {}, settings: { ...DEFAULT_SETTINGS } }, // Einrichtung
 };
 
 /* ---------- Kleine Bausteine ---------- */
@@ -303,7 +299,7 @@ function render() {
 /* ---------- Einrichtung beim ersten Start ---------- */
 function renderOnboarding() {
   const ob = ui.ob;
-  const steps = 6;
+  const steps = 5;
   const dots = `<div class="ob-dots">${Array.from({ length: steps }, (_, i) => `<i class="${i === ob.step ? 'on' : ''}"></i>`).join('')}</div>`;
   const back = ob.step > 0 ? '<button class="link" data-action="ob-back">Zurück</button>' : '';
   const pick = (on) => statusCircle(on ? 'done' : 'open');
@@ -344,20 +340,13 @@ function renderOnboarding() {
       <p class="ob-lead">Was soll passieren, wenn du etwas an einem Tag nicht schaffst? Ändern kannst du das später unter Fortschritt.</p>
       ${settingsCards(ob.settings, 'ob-setting')}`;
     button = 'Weiter';
-  } else if (ob.step === 4) {
-    body = `<h1 class="large-title">Dein Pool</h1>
-      <p class="ob-lead">Im Pool sammelst du Dinge, die nicht jeden Tag dran sind. Wenn du Zeit und Lust hast, holst du dir etwas davon auf Heute. Welche Listen willst du haben?</p>
-      <div class="card">${LIST_SUGGESTIONS.map((l) => `<div class="row"><button class="row-main" data-action="ob-list" data-name="${esc(l.name)}">
-        <span class="emoji">${l.icon}</span><span class="name" style="flex:1">${esc(l.name)}</span>${pick(ob.lists.includes(l.name))}</button></div>`).join('')}</div>
-      <p class="section-footer">Eigene Listen legst du später im Reiter Pool an.</p>`;
-    button = ob.lists.length ? `Weiter mit ${ob.lists.length} Liste${ob.lists.length === 1 ? '' : 'n'}` : 'Ohne Listen weiter';
   } else {
     body = `<div class="ob-hero"><div class="daruma big-daruma wobble" data-action="poke">${darumaSVG(true, true)}</div>
       <h1>Alles bereit${ob.name ? `, ${esc(ob.name)}` : ''}!</h1></div>
       <div class="card ob-tips">
         <p><span class="emoji">☀️</span><span><strong>Heute</strong>: Habits abhaken und To-Dos erledigen. Mit + legst du ein To-Do an.</span></p>
         <p><span class="emoji">🔁</span><span><strong>Habits</strong>: anlegen, bearbeiten, Reihenfolge ändern.</span></p>
-        <p><span class="emoji">🪣</span><span><strong>Pool</strong>: Ideen sammeln und bei Lust auf Heute holen.</span></p>
+        <p><span class="emoji">🪣</span><span><strong>Pool</strong>: deine Langzeit-Aufgaben in eigenen Listen, mit Unteraufgaben. Bei Lust holst du dir etwas auf Heute.</span></p>
         <p><span class="emoji">📱</span><span><strong>Tipp</strong>: In Safari über Teilen → „Zum Home-Bildschirm“ wird Daruma zur App.</span></p>
         <p><span class="emoji">💾</span><span><strong>Wichtig</strong>: Deine Daten liegen nur auf diesem Gerät. Unter Fortschritt kannst du ab und zu eine Sicherung herunterladen.</span></p>
       </div>`;
@@ -381,8 +370,6 @@ function finishOnboarding() {
     const step = t.kind === 'count' && t.step >= target ? Math.max(target / 4, 0.1) : t.step;
     state.habits.push({ ...makeHabit({ ...t, target, step }, nextOrder(state.habits)), ...freqValues(f) });
   });
-  LIST_SUGGESTIONS.filter((l) => ob.lists.includes(l.name))
-    .forEach((l) => state.lists.push({ id: uid(), name: l.name, icon: l.icon, order: nextOrder(state.lists) }));
   state.name = ob.name.trim();
   state.settings = { ...ob.settings };
   state.setupDone = true;
@@ -584,6 +571,7 @@ function todoRow(t, today, future) {
   const done = !!t.completedAt;
   let tag = '';
   if (list) tag = `aus ${list.name}`;
+  if (subsText(t)) tag = tag ? `${tag} · ${subsText(t)}` : subsText(t);
   else if (carriedOver(t, today)) tag = `seit ${fmt(t.plannedDay, { weekday: 'long' })}`;
   return `<div class="row">
     <button class="row-main" data-action="edit-todo" data-id="${t.id}">
@@ -642,7 +630,7 @@ function renderPoolList(list, today) {
       ${open.map((t) => {
         const planned = t.plannedDay && t.plannedDay >= today;
         return `<div class="row">
-          <button class="row-main" data-action="edit-todo" data-id="${t.id}"><span class="name">${esc(t.title)}</span></button>
+          <button class="row-main" data-action="edit-todo" data-id="${t.id}"><span class="name-wrap"><span class="name">${esc(t.title)}</span>${subsText(t) ? `<span class="tag">${subsText(t)}</span>` : ''}</span></button>
           <div class="controls">${planned
             ? `<button class="pill filled" data-action="unplan" data-id="${t.id}">${t.plannedDay === today ? 'Heute' : esc(fmt(t.plannedDay, { weekday: 'short' }))} ✓</button>`
             : `<button class="pill" data-action="plan-today" data-id="${t.id}">Auf Heute</button>`}</div>
@@ -771,6 +759,16 @@ function renderSheet() {
         ${dr.when === 'date' ? `<label class="form-row"><span>Datum</span><input type="date" data-field="date" value="${esc(dr.date)}" min="${today}"></label>` : ''}
       </div>
       <p class="section-footer">Nicht geschafft? Dann rutscht es automatisch auf den nächsten Tag.</p>`}
+      <h3 class="section-title">Unteraufgaben</h3>
+      <div class="card">
+        ${dr.subs.map((x, i) => `<div class="row">
+          <button class="status-btn" data-action="sub-toggle" data-i="${i}" aria-label="${x.done ? 'Zurücksetzen' : 'Erledigt'}">${statusCircle(x.done ? 'done' : 'open')}</button>
+          <span class="row-main"><span class="name ${x.done ? 'struck' : ''}">${esc(x.title)}</span></span>
+          <div class="controls"><button class="small-link" data-action="sub-del" data-i="${i}" aria-label="Entfernen">✕</button></div>
+        </div>`).join('')}
+        <div class="row add-row"><span class="plus">+</span><input id="sub-new" placeholder="Schritt hinzufügen" autocomplete="off" enterkeyhint="done"></div>
+      </div>
+      <p class="section-footer">Große Aufgaben in kleine Schritte teilen, z.B. „Flüge vergleichen“, „Hotel buchen“.</p>
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
       ${isNew ? '' : `<div class="card" style="margin-top:28px">
         ${t && t.listId && !t.completedAt && t.plannedDay && t.plannedDay >= today ? '<button class="btn-plain" style="color:var(--accent)" data-action="back-to-pool">Zurück in den Pool</button>' : ''}
@@ -894,15 +892,32 @@ function fail(message) { ui.draft.error = message; render(); }
 
 function todoDraft(t) {
   const today = todayKey();
-  if (!t) return { id: null, title: '', when: 'today', date: addDays(today, 2), isPool: false };
+  if (!t) return { id: null, title: '', when: 'today', date: addDays(today, 2), isPool: false, subs: [] };
   let when = 'today';
   if (t.plannedDay === addDays(today, 1)) when = 'tomorrow';
   else if (t.plannedDay && t.plannedDay > addDays(today, 1)) when = 'date';
-  return { id: t.id, title: t.title, when, date: t.plannedDay && t.plannedDay > today ? t.plannedDay : addDays(today, 2), isPool: !!t.listId };
+  return { id: t.id, title: t.title, when, date: t.plannedDay && t.plannedDay > today ? t.plannedDay : addDays(today, 2), isPool: !!t.listId, subs: (t.subs || []).map((x) => ({ ...x })) };
 }
 
+const cleanSubs = (subs) => (subs || []).filter((x) => x.title.trim()).map((x) => ({ id: x.id, title: x.title.trim(), done: !!x.done }));
+// Änderungen an Unteraufgaben gelten sofort (auch ohne Sichern), wenn das To-Do schon existiert
+function syncSubs() {
+  const dr = ui.draft;
+  if (dr.id) { todoById(dr.id).subs = cleanSubs(dr.subs); persist(); }
+  render();
+}
+function addSub() {
+  const el = document.getElementById('sub-new');
+  const title = el ? el.value.trim() : '';
+  if (!title) return;
+  ui.draft.subs.push({ id: uid(), title, done: false });
+  ui.focus = '#sub-new';
+  syncSubs();
+}
 function saveTodo() {
   const dr = ui.draft;
+  const pending = document.getElementById('sub-new');
+  if (pending && pending.value.trim()) dr.subs.push({ id: uid(), title: pending.value.trim(), done: false });
   const title = (dr.title || '').trim();
   if (!title) return fail('Bitte schreib kurz, was zu tun ist.');
   const today = todayKey();
@@ -910,9 +925,10 @@ function saveTodo() {
   if (dr.id) {
     const t = todoById(dr.id);
     t.title = title;
+    t.subs = cleanSubs(dr.subs);
     if (!t.listId && !t.completedAt) t.plannedDay = plannedDay;
   } else {
-    state.todos.push({ id: uid(), title, plannedDay, completedAt: null, createdAt: today, listId: null, order: nextOrder(state.todos) });
+    state.todos.push({ id: uid(), title, plannedDay, completedAt: null, createdAt: today, listId: null, order: nextOrder(state.todos), subs: cleanSubs(dr.subs) });
   }
   ui.sheet = null; ui.draft = null;
   persist();
@@ -998,6 +1014,8 @@ const actions = {
   },
   'edit-todo'(el) { openSheet({ type: 'todo-editor' }, todoDraft(todoById(el.dataset.id))); },
   'new-todo'() { openSheet({ type: 'todo-editor' }, todoDraft(null), '#todo-title'); },
+  'sub-toggle'(el) { const x = ui.draft.subs[Number(el.dataset.i)]; x.done = !x.done; syncSubs(); },
+  'sub-del'(el) { ui.draft.subs.splice(Number(el.dataset.i), 1); syncSubs(); },
   'set-when'(el) { ui.draft.when = el.dataset.when; render(); },
   'save-todo'() { saveTodo(); },
   'delete-todo'() {
@@ -1037,7 +1055,7 @@ const actions = {
   'ob-next'() {
     const ob = ui.ob;
     if (ob.step === 0) { const f = document.getElementById('ob-name'); ob.name = f ? f.value.trim() : ''; }
-    if (ob.step >= 5) return finishOnboarding();
+    if (ob.step >= 4) return finishOnboarding();
     ob.step += ob.step === 1 && !ob.habits.length ? 2 : 1; // ohne Habits kein Feinschliff
     window.scrollTo(0, 0); render();
   },
@@ -1050,7 +1068,6 @@ const actions = {
   },
   'ob-setting'(el) { ui.ob.settings[el.dataset.key] = el.dataset.val === '1'; render(); },
   'set-setting'(el) { state.settings[el.dataset.key] = el.dataset.val === '1'; commit(); },
-  'ob-list'(el) { const a = ui.ob.lists, n = el.dataset.name; ui.ob.lists = a.includes(n) ? a.filter((x) => x !== n) : [...a, n]; render(); },
   'set-icon'(el) { ui.draft.icon = el.dataset.icon; render(); },
   'save-habit'() { saveHabit(); },
   'delete-habit'() {
@@ -1124,6 +1141,7 @@ document.addEventListener('submit', (ev) => {
 // Enter in Text-Feldern der Sheets = Sichern
 document.addEventListener('keydown', (ev) => {
   if (ev.key === 'Enter' && ev.target.id === 'ob-name') { ev.preventDefault(); actions['ob-next'](); return; }
+  if (ev.key === 'Enter' && ev.target.id === 'sub-new') { ev.preventDefault(); addSub(); return; }
   if (ev.key !== 'Enter' || !ui.sheet || ev.target.tagName !== 'INPUT' || ev.target.closest('form')) return;
   ev.preventDefault();
   if (ui.sheet.type === 'todo-editor') saveTodo();
