@@ -3,11 +3,34 @@ import SwiftData
 
 @main
 struct DarumaApp: App {
+    private let container: ModelContainer = DarumaApp.makeContainer()
+
     var body: some Scene {
         WindowGroup {
             RootView()
         }
-        .modelContainer(for: [Habit.self, HabitLog.self])
+        .modelContainer(container)
+    }
+
+    private static func makeContainer() -> ModelContainer {
+        let schema = Schema([Habit.self, HabitLog.self])
+        #if DEBUG
+        if DemoMode.isActive {
+            let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+            do {
+                let container = try ModelContainer(for: schema, configurations: configuration)
+                DemoMode.seed(into: container)
+                return container
+            } catch {
+                fatalError("Demo-Daten konnten nicht angelegt werden: \(error)")
+            }
+        }
+        #endif
+        do {
+            return try ModelContainer(for: schema)
+        } catch {
+            fatalError("Datenspeicher konnte nicht geöffnet werden: \(error)")
+        }
     }
 }
 
@@ -36,6 +59,9 @@ struct RootView: View {
     }
 
     private func seedIfNeeded() {
+        #if DEBUG
+        if DemoMode.isActive { return }
+        #endif
         guard !didSeed else { return }
         for (index, template) in HabitCatalog.starter.enumerated() {
             context.insert(template.makeHabit(sortOrder: index))

@@ -1,0 +1,52 @@
+name: Screenshots
+
+# Startet die App im iPhone-Simulator mit Beispieldaten und macht Bilder der Bildschirme.
+on:
+  workflow_dispatch:
+
+jobs:
+  screenshots:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: App für den Simulator bauen
+        run: |
+          xcodebuild build \
+            -project Daruma.xcodeproj \
+            -target Daruma \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: iPhone-Simulator starten
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)["devices"]
+          phones = [d for runtime in sorted(data, reverse=True) for d in data[runtime] if d["name"].startswith("iPhone")]
+          preferred = [d for d in phones if d["name"] == "iPhone 16 Pro"]
+          print((preferred or phones)[0]["udid"])
+          ')
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4
+          xcrun simctl install "$UDID" build/Debug-iphonesimulator/Daruma.app
+
+      - name: Screenshots machen
+        run: |
+          mkdir -p screens
+          for scene in today alldone catalog editor; do
+            xcrun simctl terminate "$UDID" com.bigfatkid.daruma || true
+            xcrun simctl launch "$UDID" com.bigfatkid.daruma \
+              -demoScene "$scene" -AppleLanguages "(de)" -AppleLocale de_DE
+            sleep 8
+            xcrun simctl io "$UDID" screenshot "screens/$scene.png"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screens

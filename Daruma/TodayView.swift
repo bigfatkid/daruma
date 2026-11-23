@@ -62,6 +62,18 @@ struct TodayView: View {
                     HabitEditorView(habit: habit)
                 }
             }
+            .task {
+                #if DEBUG
+                switch DemoMode.scene {
+                case "catalog":
+                    showingAdd = true
+                case "editor":
+                    editingHabit = habits.first { $0.kind == .count }
+                default:
+                    break
+                }
+                #endif
+            }
         }
     }
 }
