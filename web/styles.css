@@ -547,3 +547,11 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .slider::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); border: 3px solid #fff; }
 .slider.unset::-webkit-slider-thumb { background: var(--secondary); opacity: .6; }
 .slider.unset::-moz-range-thumb { background: var(--secondary); opacity: .6; }
+.picto { width: 24px; height: 24px; display: block; }
+.emoji .picto { color: var(--accent); }
+.big .picto { width: 52px; height: 52px; margin: 0 auto; color: var(--accent); }
+.icon-grid .picto { width: 24px; height: 24px; margin: 0 auto; color: var(--text); }
+.icon-grid button.on .picto { color: var(--accent); }
+.list-title .picto { display: inline-block; width: 30px; height: 30px; vertical-align: -3px; color: var(--accent); }
+.menu-option .big .picto, .dialog .big .picto { width: 40px; height: 40px; }
+.emoji:has(.picto) { display: flex; align-items: center; justify-content: center; }

@@ -29,16 +29,26 @@ const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(3
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0);
 
+/* ---------- Piktogramme (Lucide, ISC-Lizenz) ---------- */
+const PICTO = {"bed":"<path d=\"M2 4v16\"/><path d=\"M2 8h18a2 2 0 0 1 2 2v10\"/><path d=\"M2 17h20\"/><path d=\"M6 8v9\"/>","bed-double":"<path d=\"M2 20v-8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8\"/><path d=\"M4 10V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4\"/><path d=\"M12 4v6\"/><path d=\"M2 18h20\"/>","biceps-flexed":"<path d=\"M12.409 13.017A5 5 0 0 1 22 15c0 3.866-4 7-9 7-4.077 0-8.153-.82-10.371-2.462-.426-.316-.631-.832-.62-1.362C2.118 12.723 2.627 2 10 2a3 3 0 0 1 3 3 2 2 0 0 1-2 2c-1.105 0-1.64-.444-2-1\"/><path d=\"M15 14a5 5 0 0 0-7.584 2\"/><path d=\"M9.964 6.825C8.019 7.977 9.5 13 8 15\"/>","book":"<path d=\"M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20\"/>","book-open":"<path d=\"M12 7v14\"/><path d=\"M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z\"/>","brain":"<path d=\"M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z\"/><path d=\"M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z\"/><path d=\"M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4\"/><path d=\"M17.599 6.5a3 3 0 0 0 .399-1.375\"/><path d=\"M6.003 5.125A3 3 0 0 0 6.401 6.5\"/><path d=\"M3.477 10.896a4 4 0 0 1 .585-.396\"/><path d=\"M19.938 10.5a4 4 0 0 1 .585.396\"/><path d=\"M6 18a4 4 0 0 1-1.967-.516\"/><path d=\"M19.967 17.484A4 4 0 0 1 18 18\"/>","briefcase":"<path d=\"M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16\"/><rect width=\"20\" height=\"14\" x=\"2\" y=\"6\" rx=\"2\"/>","camera":"<path d=\"M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z\"/><circle cx=\"12\" cy=\"13\" r=\"3\"/>","car":"<path d=\"M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2\"/><circle cx=\"7\" cy=\"17\" r=\"2\"/><path d=\"M9 17h6\"/><circle cx=\"17\" cy=\"17\" r=\"2\"/>","carrot":"<path d=\"M2.27 21.7s9.87-3.5 12.73-6.36a4.5 4.5 0 0 0-6.36-6.37C5.77 11.84 2.27 21.7 2.27 21.7zM8.64 14l-2.05-2.04M15.34 15l-2.46-2.46\"/><path d=\"M22 9s-1.33-2-3.5-2C16.86 7 15 9 15 9s1.33 2 3.5 2S22 9 22 9z\"/><path d=\"M15 2s-2 1.33-2 3.5S15 9 15 9s2-1.84 2-3.5C17 3.33 15 2 15 2z\"/>","cat":"<path d=\"M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 7-.42 7 .57 1.07 1 2.24 1 3.44C21 17.9 16.97 21 12 21s-9-3-9-7.56c0-1.25.5-2.4 1-3.44 0 0-1.89-6.42-.5-7 1.39-.58 4.72.23 6.5 2.23A9.04 9.04 0 0 1 12 5Z\"/><path d=\"M8 14v.5\"/><path d=\"M16 14v.5\"/><path d=\"M11.25 16.25h1.5L12 17l-.75-.75Z\"/>","check":"<path d=\"M20 6 9 17l-5-5\"/>","chef-hat":"<path d=\"M17 21a1 1 0 0 0 1-1v-5.35c0-.457.316-.844.727-1.041a4 4 0 0 0-2.134-7.589 5 5 0 0 0-9.186 0 4 4 0 0 0-2.134 7.588c.411.198.727.585.727 1.041V20a1 1 0 0 0 1 1Z\"/><path d=\"M6 17h12\"/>","circle-help":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3\"/><path d=\"M12 17h.01\"/>","clapperboard":"<path d=\"M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z\"/><path d=\"m6.2 5.3 3.1 3.9\"/><path d=\"m12.4 3.4 3.1 4\"/><path d=\"M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z\"/>","clipboard-list":"<rect width=\"8\" height=\"4\" x=\"8\" y=\"2\" rx=\"1\" ry=\"1\"/><path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\"/><path d=\"M12 11h4\"/><path d=\"M12 16h4\"/><path d=\"M8 11h.01\"/><path d=\"M8 16h.01\"/>","clipboard-pen":"<rect width=\"8\" height=\"4\" x=\"8\" y=\"2\" rx=\"1\"/><path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5.5\"/><path d=\"M4 13.5V6a2 2 0 0 1 2-2h2\"/><path d=\"M13.378 15.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z\"/>","cloud-sun":"<path d=\"M12 2v2\"/><path d=\"m4.93 4.93 1.41 1.41\"/><path d=\"M20 12h2\"/><path d=\"m19.07 4.93-1.41 1.41\"/><path d=\"M15.947 12.65a4 4 0 0 0-5.925-4.128\"/><path d=\"M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z\"/>","coffee":"<path d=\"M10 2v2\"/><path d=\"M14 2v2\"/><path d=\"M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1\"/><path d=\"M6 2v2\"/>","compass":"<path d=\"m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z\"/><circle cx=\"12\" cy=\"12\" r=\"10\"/>","dices":"<rect width=\"12\" height=\"12\" x=\"2\" y=\"10\" rx=\"2\" ry=\"2\"/><path d=\"m17.92 14 3.5-3.5a2.24 2.24 0 0 0 0-3l-5-4.92a2.24 2.24 0 0 0-3 0L10 6\"/><path d=\"M6 18h.01\"/><path d=\"M10 14h.01\"/><path d=\"M15 6h.01\"/><path d=\"M18 9h.01\"/>","dog":"<path d=\"M11.25 16.25h1.5L12 17z\"/><path d=\"M16 14v.5\"/><path d=\"M4.42 11.247A13.152 13.152 0 0 0 4 14.556C4 18.728 7.582 21 12 21s8-2.272 8-6.444a11.702 11.702 0 0 0-.493-3.309\"/><path d=\"M8 14v.5\"/><path d=\"M8.5 8.5c-.384 1.05-1.083 2.028-2.344 2.5-1.931.722-3.576-.297-3.656-1-.113-.994 1.177-6.53 4-7 1.923-.321 3.651.845 3.651 2.235A7.497 7.497 0 0 1 14 5.277c0-1.39 1.844-2.598 3.767-2.277 2.823.47 4.113 6.006 4 7-.08.703-1.725 1.722-3.656 1-1.261-.472-1.855-1.45-2.239-2.5\"/>","droplet":"<path d=\"M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z\"/>","dumbbell":"<path d=\"M14.4 14.4 9.6 9.6\"/><path d=\"M18.657 21.485a2 2 0 1 1-2.829-2.828l-1.767 1.768a2 2 0 1 1-2.829-2.829l6.364-6.364a2 2 0 1 1 2.829 2.829l-1.768 1.767a2 2 0 1 1 2.828 2.829z\"/><path d=\"m21.5 21.5-1.4-1.4\"/><path d=\"M3.9 3.9 2.5 2.5\"/><path d=\"M6.404 12.768a2 2 0 1 1-2.829-2.829l1.768-1.767a2 2 0 1 1-2.828-2.829l2.828-2.828a2 2 0 1 1 2.829 2.828l1.767-1.768a2 2 0 1 1 2.829 2.829z\"/>","flower-2":"<path d=\"M12 5a3 3 0 1 1 3 3m-3-3a3 3 0 1 0-3 3m3-3v1M9 8a3 3 0 1 0 3 3M9 8h1m5 0a3 3 0 1 1-3 3m3-3h-1m-2 3v-1\"/><circle cx=\"12\" cy=\"8\" r=\"2\"/><path d=\"M12 10v12\"/><path d=\"M12 22c4.2 0 7-1.667 7-5-4.2 0-7 1.667-7 5Z\"/><path d=\"M12 22c-4.2 0-7-1.667-7-5 4.2 0 7 1.667 7 5Z\"/>","folder":"<path d=\"M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z\"/>","folder-open":"<path d=\"m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2\"/>","footprints":"<path d=\"M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z\"/><path d=\"M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z\"/><path d=\"M16 17h4\"/><path d=\"M4 13h4\"/>","gamepad-2":"<line x1=\"6\" x2=\"10\" y1=\"11\" y2=\"11\"/><line x1=\"8\" x2=\"8\" y1=\"9\" y2=\"13\"/><line x1=\"15\" x2=\"15.01\" y1=\"12\" y2=\"12\"/><line x1=\"18\" x2=\"18.01\" y1=\"10\" y2=\"10\"/><path d=\"M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z\"/>","gift":"<rect x=\"3\" y=\"8\" width=\"18\" height=\"4\" rx=\"1\"/><path d=\"M12 8v13\"/><path d=\"M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7\"/><path d=\"M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5\"/>","graduation-cap":"<path d=\"M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z\"/><path d=\"M22 10v6\"/><path d=\"M6 12.5V16a6 3 0 0 0 12 0v-3.5\"/>","hammer":"<path d=\"m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9\"/><path d=\"m18 15 4-4\"/><path d=\"m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586L18.5 14.5\"/>","hand-heart":"<path d=\"M11 14h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16\"/><path d=\"m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9\"/><path d=\"m2 15 6 6\"/><path d=\"M19.5 8.5c.7-.7 1.5-1.6 1.5-2.7A2.73 2.73 0 0 0 16 4a2.78 2.78 0 0 0-5 1.8c0 1.2.8 2 1.5 2.8L16 12Z\"/>","heart":"<path d=\"M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z\"/>","hourglass":"<path d=\"M5 22h14\"/><path d=\"M5 2h14\"/><path d=\"M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22\"/><path d=\"M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2\"/>","house":"<path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\"/><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/>","leaf":"<path d=\"M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z\"/><path d=\"M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12\"/>","lightbulb":"<path d=\"M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5\"/><path d=\"M9 18h6\"/><path d=\"M10 22h4\"/>","luggage":"<path d=\"M6 20a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2\"/><path d=\"M8 18V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v14\"/><path d=\"M10 20h4\"/><circle cx=\"16\" cy=\"20\" r=\"2\"/><circle cx=\"8\" cy=\"20\" r=\"2\"/>","message-circle":"<path d=\"M7.9 20A9 9 0 1 0 4 16.1L2 22Z\"/>","moon":"<path d=\"M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z\"/>","music":"<path d=\"M9 18V5l12-2v13\"/><circle cx=\"6\" cy=\"18\" r=\"3\"/><circle cx=\"18\" cy=\"16\" r=\"3\"/>","notebook-pen":"<path d=\"M13.4 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7.4\"/><path d=\"M2 6h4\"/><path d=\"M2 10h4\"/><path d=\"M2 14h4\"/><path d=\"M2 18h4\"/><path d=\"M21.378 5.626a1 1 0 1 0-3.004-3.004l-5.01 5.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z\"/>","package":"<path d=\"M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z\"/><path d=\"M12 22V12\"/><path d=\"m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7\"/><path d=\"m7.5 4.27 9 5.15\"/>","palette":"<circle cx=\"13.5\" cy=\"6.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"17.5\" cy=\"10.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"8.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\"/><circle cx=\"6.5\" cy=\"12.5\" r=\".5\" fill=\"currentColor\"/><path d=\"M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z\"/>","person-standing":"<circle cx=\"12\" cy=\"5\" r=\"1\"/><path d=\"m9 20 3-6 3 6\"/><path d=\"m6 8 6 2 6-2\"/><path d=\"M12 10v4\"/>","piggy-bank":"<path d=\"M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z\"/><path d=\"M2 9v1c0 1.1.9 2 2 2h1\"/><path d=\"M16 11h.01\"/>","pill":"<path d=\"m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z\"/><path d=\"m8.5 8.5 7 7\"/>","pin":"<path d=\"M12 17v5\"/><path d=\"M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z\"/>","plane":"<path d=\"M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z\"/>","plus":"<path d=\"M5 12h14\"/><path d=\"M12 5v14\"/>","repeat":"<path d=\"m17 2 4 4-4 4\"/><path d=\"M3 11v-1a4 4 0 0 1 4-4h14\"/><path d=\"m7 22-4-4 4-4\"/><path d=\"M21 13v1a4 4 0 0 1-4 4H3\"/>","save":"<path d=\"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z\"/><path d=\"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7\"/><path d=\"M7 3v4a1 1 0 0 0 1 1h7\"/>","shopping-cart":"<circle cx=\"8\" cy=\"21\" r=\"1\"/><circle cx=\"19\" cy=\"21\" r=\"1\"/><path d=\"M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12\"/>","smartphone":"<rect width=\"14\" height=\"20\" x=\"5\" y=\"2\" rx=\"2\" ry=\"2\"/><path d=\"M12 18h.01\"/>","smile":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M8 14s1.5 2 4 2 4-2 4-2\"/><line x1=\"9\" x2=\"9.01\" y1=\"9\" y2=\"9\"/><line x1=\"15\" x2=\"15.01\" y1=\"9\" y2=\"9\"/>","sparkles":"<path d=\"M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z\"/><path d=\"M20 3v4\"/><path d=\"M22 5h-4\"/><path d=\"M4 17v2\"/><path d=\"M5 18H3\"/>","sprout":"<path d=\"M7 20h10\"/><path d=\"M10 20c5.5-2.5.8-6.4 3-10\"/><path d=\"M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z\"/><path d=\"M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z\"/>","star":"<path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\"/>","sun":"<circle cx=\"12\" cy=\"12\" r=\"4\"/><path d=\"M12 2v2\"/><path d=\"M12 20v2\"/><path d=\"m4.93 4.93 1.41 1.41\"/><path d=\"m17.66 17.66 1.41 1.41\"/><path d=\"M2 12h2\"/><path d=\"M20 12h2\"/><path d=\"m6.34 17.66-1.41 1.41\"/><path d=\"m19.07 4.93-1.41 1.41\"/>","target":"<circle cx=\"12\" cy=\"12\" r=\"10\"/><circle cx=\"12\" cy=\"12\" r=\"6\"/><circle cx=\"12\" cy=\"12\" r=\"2\"/>","tent":"<path d=\"M3.5 21 14 3\"/><path d=\"M20.5 21 10 3\"/><path d=\"M15.5 21 12 15l-3.5 6\"/><path d=\"M2 21h20\"/>","thermometer":"<path d=\"M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z\"/>","utensils":"<path d=\"M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2\"/><path d=\"M7 2v20\"/><path d=\"M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7\"/>","wind":"<path d=\"M12.8 19.6A2 2 0 1 0 14 16H2\"/><path d=\"M17.5 8a2.5 2.5 0 1 1 2 4H2\"/><path d=\"M9.8 4.4A2 2 0 1 1 11 8H2\"/>","wine":"<path d=\"M8 22h8\"/><path d=\"M7 10h10\"/><path d=\"M12 15v7\"/><path d=\"M12 15a5 5 0 0 0 5-5c0-2-.5-4-2-8H9c-1.5 4-2 6-2 8a5 5 0 0 0 5 5Z\"/>","zap":"<path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\"/>"};
+const EMOJI_PICTO = {"💧": "droplet", "🚶": "footprints", "🏃": "dumbbell", "🤸": "person-standing", "🦵": "footprints", "🥕": "carrot", "🛏️": "bed", "📖": "book-open", "🧠": "brain", "⏳": "hourglass", "📵": "smartphone", "✨": "sparkles", "🧘": "flower-2", "✍️": "notebook-pen", "🙏": "hand-heart", "🍃": "leaf", "💬": "message-circle", "✅": "check", "☕": "coffee", "🗒️": "clipboard-list", "💊": "pill", "🎵": "music", "💪": "biceps-flexed", "🌙": "moon", "☀️": "sun", "🐶": "dog", "🙂": "smile", "⚡": "zap", "😴": "bed-double", "🌪️": "wind", "🎯": "target", "🌤️": "cloud-sun", "💆": "heart", "🤕": "thermometer", "🍷": "wine", "❤️": "heart", "🍽️": "utensils", "❓": "circle-help", "📦": "package", "🏠": "house", "📚": "book", "🔨": "hammer", "✈️": "plane", "🛒": "shopping-cart", "🎁": "gift", "🎬": "clapperboard", "🍳": "chef-hat", "💡": "lightbulb", "🌱": "sprout", "🎨": "palette", "⭐": "star", "📷": "camera", "🎮": "gamepad-2", "🐱": "cat", "🚗": "car", "💼": "briefcase", "🎓": "graduation-cap", "🏡": "tent", "💰": "piggy-bank", "🧳": "luggage", "📌": "pin", "➕": "plus", "💾": "save", "📂": "folder-open", "🧭": "compass", "🔁": "repeat", "📁": "folder", "🎲": "dices", "📝": "clipboard-pen"};
+// Gespeichert bleiben die bisherigen Zeichen, angezeigt wird ein einfarbiges Piktogramm.
+function pic(icon) {
+  const name = PICTO[icon] ? icon : EMOJI_PICTO[icon];
+  if (!name) return esc(icon || '');
+  return `<svg class="picto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PICTO[name]}</svg>`;
+}
+
 /* ---------- Katalog ---------- */
 // Namen ohne Mengen. Mengen stehen immer im Ziel (bearbeitbar), Ja/Nein-Habits haben keins.
 const CATALOG = [
   { name: 'Körper', items: [
-    { name: 'Wasser trinken', icon: '💧', kind: 'count', target: 3, step: 0.5, unit: 'L', fixedGoal: true },
+    { name: 'Wasser trinken', icon: '💧', kind: 'count', target: 3, step: 1, unit: 'L', fixedGoal: true },
     { name: 'Schritte', icon: '🚶', kind: 'count', target: 10000, step: 1000, unit: 'Schritte', fixedGoal: true },
     { name: 'Sport', icon: '🏃', kind: 'count', target: 30, step: 10, unit: 'min' },
     { name: 'Dehnen', icon: '🤸', kind: 'count', target: 10, step: 5, unit: 'min' },
     { name: 'Obst oder Gemüse', icon: '🥕', kind: 'count', target: 400, step: 100, unit: 'g' },
-    { name: 'Schlafdauer', icon: '🛏️', kind: 'count', target: 8, step: 0.5, unit: 'h', fixedGoal: true },
+    { name: 'Schlafdauer', icon: '🛏️', kind: 'count', target: 8, step: 1, unit: 'h', fixedGoal: true },
   ] },
   { name: 'Geist', items: [
     { name: 'Lesen', icon: '📖', kind: 'count', target: 10, step: 5, unit: 'Seiten' },
@@ -85,10 +95,12 @@ const rollsOver = () => true;
 function freshState() {
   return { version: 1, name: '', setupDone: false, catchUpV2: true, habits: [], logs: {}, todos: [], lists: [], ...moduleDefaults() };
 }
-const moduleDefaults = () => ({ checkinV2: true, checkinQuestions: [], checkins: {} });
+const moduleDefaults = () => ({ stepV2: true, checkinV2: true, checkinQuestions: [], checkins: {} });
 function normalize(s) {
   // Einmalig: Standard für "Habits nachholen" ist jetzt aus. Kurz zuvor gesetzte Werte zurücksetzen.
   if (!s.catchUpV2 && Array.isArray(s.habits)) s.habits.forEach((h) => { delete h.catchUp; });
+  // Einmalig: Wasser und Schlaf zählen pro Tipp um 1 (Mattis Wunsch).
+  if (!s.stepV2 && Array.isArray(s.habits)) s.habits.forEach((h) => { if ((h.name === 'Wasser trinken' || h.name === 'Schlafdauer') && h.step === 0.5) h.step = 1; });
   return {
     version: 1,
     name: typeof s.name === 'string' ? s.name : '',
@@ -100,6 +112,7 @@ function normalize(s) {
     todos: Array.isArray(s.todos) ? s.todos : [],
     lists: Array.isArray(s.lists) ? s.lists : [],
     checkinV2: true,
+    stepV2: true,
     // Check-in erscheint, sobald Fragen gewählt sind. Aus der kurzen Modul-Version nur übernehmen, wenn der Check-in an war.
     checkinQuestions: Array.isArray(s.checkinQuestions) && (s.checkinV2 || (Array.isArray(s.modules) && s.modules.some((m) => m.id === 'checkin' && m.on))) ? s.checkinQuestions : [],
     checkins: s.checkins && typeof s.checkins === 'object' ? s.checkins : {},
@@ -271,22 +284,22 @@ function renderQuestionList() {
   const qs = state.checkinQuestions;
   return `<h3 class="section-title">Check-in-Fragen</h3>
     ${qs.length ? `<div class="card">${qs.map((q, i) => `<div class="row">
-      <button class="row-main" data-action="edit-question" data-id="${q.id}"><span class="emoji">${q.icon || '❓'}</span>
+      <button class="row-main" data-action="edit-question" data-id="${q.id}"><span class="emoji">${pic(q.icon || '❓')}</span>
         <span class="name-wrap"><span class="name">${esc(q.text)}</span><span class="tag">${qTypeLabel(q.type)}</span></span></button>
       <div class="controls order-btns">
         <button class="step" data-action="q-move" data-id="${q.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Nach oben">↑</button>
         <button class="step" data-action="q-move" data-id="${q.id}" data-dir="1" ${i === qs.length - 1 ? 'disabled' : ''} aria-label="Nach unten">↓</button>
       </div></div>`).join('')}</div>` : ''}
     <p class="section-footer">${qs.length ? 'Die Fragen beantwortest du täglich auf Heute.' : 'Kurze Fragen zu deinem Tag, z.B. Stimmung oder Schlaf. Sobald du eine auswählst, erscheint der Check-in auf Heute.'}</p>
-    <div class="card" style="margin-top:12px"><div class="row"><button class="row-main" data-action="open-q-catalog"><span class="emoji">➕</span><span class="name" style="color:var(--accent)">Frage hinzufügen</span></button></div></div>`;
+    <div class="card" style="margin-top:12px"><div class="row"><button class="row-main" data-action="open-q-catalog"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Frage hinzufügen</span></button></div></div>`;
 }
 
 function renderQuestionCatalog() {
   const have = new Set(state.checkinQuestions.map((q) => q.text));
   const groups = Q_TYPES.map(([k, l]) => [l, Q_CATALOG.filter((q) => q.type === k)]);
-  const body = `<div class="card" style="margin-top:6px"><div class="row"><button class="row-main" data-action="question-new"><span class="emoji">➕</span><span class="name" style="color:var(--accent)">Eigene Frage erstellen</span></button></div></div>
+  const body = `<div class="card" style="margin-top:6px"><div class="row"><button class="row-main" data-action="question-new"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Eigene Frage erstellen</span></button></div></div>
     ${groups.map(([label, items]) => `<h3 class="section-title">${label}</h3><div class="card">${items.map((q) => `<div class="row"><button class="row-main" data-action="question-pick" data-text="${esc(q.text)}">
-      <span class="emoji">${q.icon}</span><span class="name" style="flex:1">${esc(q.text)}</span>${have.has(q.text) ? `<span class="value chosen">Schon dabei</span>${statusCircle('done')}` : `<span class="plus-mini">+</span>`}</button></div>`).join('')}</div>`).join('')}`;
+      <span class="emoji">${pic(q.icon)}</span><span class="name" style="flex:1">${esc(q.text)}</span>${have.has(q.text) ? `<span class="value chosen">Schon dabei</span>${statusCircle('done')}` : `<span class="plus-mini">+</span>`}</button></div>`).join('')}</div>`).join('')}`;
   return sheetShell('Frage hinzufügen', cancelBtn, '', body);
 }
 
@@ -302,7 +315,7 @@ function renderQuestionEditor() {
       <label class="form-row"><span>Rechts (10)</span><input data-field="hi" value="${esc(dr.hi)}" placeholder="viel"></label></div>` : ''}
     <p class="section-footer">${dr.type === 'scale' ? 'Du schiebst einen Regler von 0 bis 10. Die Wörter stehen links und rechts darunter.' : dr.type === 'yesno' ? 'Du antwortest mit Ja oder Nein.' : 'Du schreibst ein paar freie Worte.'}</p>
     <h3 class="section-title">Symbol</h3>
-    <div class="card"><div class="icon-grid">${(Q_ICONS.includes(dr.icon) ? Q_ICONS : [dr.icon, ...Q_ICONS]).map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${i}</button>`).join('')}</div></div>
+    <div class="card"><div class="icon-grid">${(Q_ICONS.includes(dr.icon) ? Q_ICONS : [dr.icon, ...Q_ICONS]).map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${pic(i)}</button>`).join('')}</div></div>
     ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
     ${isNew ? '' : `<div class="card" style="margin-top:28px"><button class="btn-danger" data-action="q-del">${dr.confirmDelete ? 'Wirklich entfernen? Nochmal tippen' : 'Frage entfernen'}</button></div>`}`;
   return sheetShell(isNew ? 'Eigene Frage' : 'Frage bearbeiten', isNew ? '<button class="link" data-action="open-q-catalog">Zurück</button>' : cancelBtn,
@@ -323,7 +336,7 @@ function saveQuestion() {
 function renderCheckinStats(today) {
   const rows = state.checkinQuestions.filter((q) => q.type !== 'note').map((q) => {
     const vals = (n) => Array.from({ length: n }, (_, i) => checkinFor(addDays(today, -i))[q.id]).filter(answered);
-    const head = `<div class="stat-head"><span class="emoji">${q.icon || '❓'}</span><span class="name">${esc(q.text)}</span></div>`;
+    const head = `<div class="stat-head"><span class="emoji">${pic(q.icon || '❓')}</span><span class="name">${esc(q.text)}</span></div>`;
     if (q.type === 'scale') {
       const avg = (a) => (a.length ? num(a.reduce((s, x) => s + x, 0) / a.length) : '–');
       const bars = Array.from({ length: 14 }, (_, i) => checkinFor(addDays(today, i - 13))[q.id]).map((v) => `<i style="height:${answered(v) ? Math.max(v * 10, 4) : 4}%" class="${answered(v) ? 'on' : ''}"></i>`).join('');
@@ -341,11 +354,11 @@ function renderSettingsSheet() {
     <input class="field" id="settings-name" data-setting="name" value="${esc(state.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name">
     <h3 class="section-title">Deine Daten</h3>
     <div class="card">
-      <div class="row"><button class="row-main" data-action="export"><span class="emoji">💾</span><span class="name">Sicherung herunterladen</span></button></div>
-      <div class="row"><label class="row-main" style="cursor:pointer"><span class="emoji">📂</span><span class="name">Sicherung laden</span><input type="file" accept="application/json,.json" data-action="import" hidden></label></div>
+      <div class="row"><button class="row-main" data-action="export"><span class="emoji">${pic('💾')}</span><span class="name">Sicherung herunterladen</span></button></div>
+      <div class="row"><label class="row-main" style="cursor:pointer"><span class="emoji">${pic('📂')}</span><span class="name">Sicherung laden</span><input type="file" accept="application/json,.json" data-action="import" hidden></label></div>
     </div>
     <p class="section-footer">Alles bleibt nur auf diesem Gerät gespeichert. Eine Sicherung ab und zu schadet nicht.</p>
-    <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="tour-start"><span class="emoji">🧭</span><span class="name">App-Tour noch mal ansehen</span></button></div></div>`;
+    <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="tour-start"><span class="emoji">${pic('🧭')}</span><span class="name">App-Tour noch mal ansehen</span></button></div></div>`;
   return sheetShell('Einstellungen', '', '<button class="link" style="font-weight:600" data-action="close-sheet">Fertig</button>', body);
 }
 
@@ -461,7 +474,7 @@ function renderOnboarding() {
     body = `<h1 class="large-title">Deine Habits</h1>
       <p class="ob-lead">Hier ist eine Vorauswahl beliebter Habits für den Start. Wähle aus, was zu dir passt, lieber erst mal wenige. Im nächsten Schritt legst du Ziel und Häufigkeit fest.</p>
       ${CATALOG.map((c) => `<h3 class="section-title">${esc(c.name)}</h3><div class="card">${c.items.map((t) => `<div class="row"><button class="row-main" data-action="ob-habit" data-name="${esc(t.name)}">
-          <span class="emoji">${t.icon}</span><span class="name" style="flex:1">${esc(t.name)}</span>${pick(ob.habits.includes(t.name))}</button></div>`).join('')}</div>`).join('')}
+          <span class="emoji">${pic(t.icon)}</span><span class="name" style="flex:1">${esc(t.name)}</span>${pick(ob.habits.includes(t.name))}</button></div>`).join('')}</div>`).join('')}
       <p class="section-footer">Nicht dabei, was du suchst? Eigene Habits legst du nach der Einrichtung im Reiter Habits an.</p>`;
     button = ob.habits.length ? `Weiter mit ${ob.habits.length} Habit${ob.habits.length === 1 ? '' : 's'}` : 'Ohne Habits weiter';
   } else if (ob.step === 2) {
@@ -471,7 +484,7 @@ function renderOnboarding() {
       ${chosen.map((t) => {
         const f = ob.cfg[t.name], attr = `data-name="${esc(t.name)}"`;
         return `<div class="card ob-cfg">
-          <div class="ob-cfg-head"><span class="emoji">${t.icon}</span><strong>${esc(t.name)}</strong><span class="value">${t.kind === 'check' || f.noGoal ? 'Ja/Nein' : ''}</span></div>
+          <div class="ob-cfg-head"><span class="emoji">${pic(t.icon)}</span><strong>${esc(t.name)}</strong><span class="value">${t.kind === 'check' || f.noGoal ? 'Ja/Nein' : ''}</span></div>
           ${t.kind === 'count' && !t.fixedGoal ? toggleRow('Mit Ziel', !f.noGoal, `data-action="ob-toggle" data-name="${esc(t.name)}" data-key="noGoal"`) : ''}
           ${t.kind !== 'check' && !f.noGoal ? `<label class="form-row ob-goal"><span>${t.kind === 'limit' ? 'Höchstens pro Tag' : f.freq === 'week' ? 'Ziel pro Mal' : 'Ziel pro Tag'}</span>
             <span class="tune-input"><input data-ob-target="${esc(t.name)}" inputmode="decimal" value="${esc(f.target)}"> ${esc(t.unit)}</span></label>` : ''}
@@ -605,7 +618,7 @@ function renderToday() {
     <div class="card">${weekly.map((h) => habitRow(h, d, future)).join('')}</div>` : ''}
 
     ${catchUp.length ? `<h3 class="section-title">Von gestern offen</h3>
-    <div class="card">${catchUp.map((h) => `<div class="row"><div class="row-main"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span></div>
+    <div class="card">${catchUp.map((h) => `<div class="row"><div class="row-main"><span class="emoji">${pic(h.icon)}</span><span class="name">${esc(h.name)}</span></div>
       <div class="controls"><button class="pill" data-action="catch-up" data-id="${h.id}">Nachholen</button></div></div>`).join('')}</div>
     <p class="section-footer">Zählt für gestern. Was du heute nicht nachholst, verfällt. Pro Habit einstellbar.</p>` : ''}
 
@@ -669,8 +682,8 @@ function habitRow(h, d, future) {
     : `<span class="name">${esc(h.name)}</span>`;
   return `<div class="row">
     ${h.kind !== 'limit' && !future
-      ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${h.icon}</span>${label}</button>`
-      : `<div class="row-main"><span class="emoji">${h.icon}</span>${label}</div>`}
+      ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${pic(h.icon)}</span>${label}</button>`
+      : `<div class="row-main"><span class="emoji">${pic(h.icon)}</span>${label}</div>`}
     <div class="controls">${controls}</div>
   </div>`;
 }
@@ -696,7 +709,7 @@ function renderHabits() {
     <h1 class="large-title">Habits</h1>`;
   if (!habits.length) {
     return `${head}<div class="card empty-state">
-      <div class="big">🔁</div>
+      <div class="big">${pic('🔁')}</div>
       <h2>Noch keine Habits</h2>
       <p>Such dir etwas aus dem Katalog aus oder leg ein eigenes Habit an. Abgehakt wird dann im Reiter Heute.</p>
       <button class="btn-primary" data-action="open-catalog">Habit hinzufügen</button>
@@ -706,7 +719,7 @@ function renderHabits() {
   return `${head}
     <div class="card">${habits.map((h, i) => `<div class="row">
       <button class="row-main" data-action="edit-habit" data-id="${h.id}">
-        <span class="emoji">${h.icon}</span>
+        <span class="emoji">${pic(h.icon)}</span>
         <span class="name-wrap"><span class="name">${esc(h.name)}</span><span class="tag">${esc([goalText(h), scheduleText(h)].filter(Boolean).join(' · '))}</span></span>
       </button>
       <div class="controls order-btns">
@@ -715,7 +728,7 @@ function renderHabits() {
       </div>
     </div>`).join('')}</div>
     <p class="section-footer">Tippe auf ein Habit, um es zu bearbeiten. Mit den Pfeilen legst du die Reihenfolge auf Heute fest.</p>
-    <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="open-catalog"><span class="emoji">➕</span><span class="name" style="color:var(--accent)">Habit hinzufügen</span></button></div></div>
+    <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="open-catalog"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Habit hinzufügen</span></button></div></div>
     ${renderQuestionList()}`;
 }
 
@@ -728,7 +741,7 @@ function todoRow(t, today, future) {
   else if (carriedOver(t, today)) tag = `seit ${fmt(t.plannedDay, { weekday: 'long' })}`;
   return `<div class="row">
     <button class="row-main" data-action="edit-todo" data-id="${t.id}">
-      <span class="emoji">${list ? list.icon : '📌'}</span>
+      <span class="emoji">${pic(list ? list.icon : '📌')}</span>
       <span class="name-wrap"><span class="name ${done ? 'struck' : ''}">${esc(t.title)}</span>${tag && !done ? `<span class="tag">${esc(tag)}</span>` : ''}</span>
     </button>
     <div class="controls"><button class="status-btn" data-action="toggle-todo" data-id="${t.id}" ${future ? 'disabled' : ''} aria-label="${done ? 'Zurücksetzen' : 'Erledigt'}">${statusCircle(done ? 'done' : 'open')}</button></div>
@@ -747,7 +760,7 @@ function renderPool() {
 
   if (!lists.length) {
     return `${head}<div class="card empty-state">
-      <div class="big">📁</div>
+      <div class="big">${pic('📁')}</div>
       <h2>Noch keine Projekte</h2>
       <p>Hier sammelst du größere Vorhaben und ihre Aufgaben, z.B. „Urlaub planen“ oder „Wohnung renovieren“. Wenn du Zeit und Lust hast, holst du dir eine Aufgabe auf Heute.</p>
       <button class="btn-primary" data-action="new-list">Erstes Projekt anlegen</button>
@@ -756,17 +769,17 @@ function renderPool() {
 
   return `${head}
     <div class="card"><button class="surprise" data-action="surprise" ${open.length ? '' : 'disabled'}>
-      <span class="big">🎲</span><span><strong>Überrasch mich</strong><span class="sub">${open.length ? `Eine zufällige Aufgabe aus ${open.length} offenen` : 'Gerade ist nichts offen'}</span></span>
+      <span class="big">${pic('🎲')}</span><span><strong>Überrasch mich</strong><span class="sub">${open.length ? `Eine zufällige Aufgabe aus ${open.length} offenen` : 'Gerade ist nichts offen'}</span></span>
     </button></div>
     <h3 class="section-title">Deine Projekte</h3>
     <div class="card">${lists.map((l) => {
       const n = state.todos.filter((t) => t.listId === l.id && inPool(t, today)).length;
       return `<div class="row"><button class="row-main" data-action="open-list" data-id="${l.id}">
-        <span class="emoji">${l.icon}</span><span class="name" style="flex:1">${esc(l.name)}</span>
+        <span class="emoji">${pic(l.icon)}</span><span class="name" style="flex:1">${esc(l.name)}</span>
         <span class="count">${n}</span><svg class="chevron" viewBox="0 0 8 14">${ICON.right.replace(/<\/?svg[^>]*>/g, '')}</svg>
       </button></div>`;
     }).join('')}</div>
-    <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="new-list"><span class="emoji">➕</span><span class="name" style="color:var(--accent)">Projekt hinzufügen</span></button></div></div>`;
+    <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="new-list"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Projekt hinzufügen</span></button></div></div>`;
 }
 
 function renderPoolList(list, today) {
@@ -778,7 +791,7 @@ function renderPoolList(list, today) {
       <div class="nav-side"><button class="back" data-action="close-list">${ICON.back}<span>Projekte</span></button></div>
       <div class="nav-side right"><button class="link" data-action="edit-list" data-id="${list.id}">Bearbeiten</button></div>
     </header>
-    <h1 class="large-title">${list.icon} ${esc(list.name)}</h1>
+    <h1 class="large-title list-title">${pic(list.icon)} ${esc(list.name)}</h1>
     <div class="card">
       ${open.map((t) => {
         const planned = t.plannedDay && t.plannedDay >= today;
@@ -816,7 +829,7 @@ function renderProgress() {
       dots.push(`<i class="${cls}" title="${esc(fmt(d, { weekday: 'short', day: 'numeric', month: 'short' }))}"></i>`);
     }
     return `<div class="stat">
-      <div class="stat-head"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span><span class="streak">${s > 0 ? `🔥 ${s} ${isWeekly(h) ? (s === 1 ? 'Woche' : 'Wochen') : (s === 1 ? 'Tag' : 'Tage')}` : ''}</span></div>
+      <div class="stat-head"><span class="emoji">${pic(h.icon)}</span><span class="name">${esc(h.name)}</span><span class="streak">${s > 0 ? `🔥 ${s} ${isWeekly(h) ? (s === 1 ? 'Woche' : 'Wochen') : (s === 1 ? 'Tag' : 'Tage')}` : ''}</span></div>
       <div class="stat-sub">Woche ${w === null ? '–' : w + ' %'} · 30 Tage ${m === null ? '–' : m + ' %'}</div>
       <div class="dots">${dots.join('')}</div>
     </div>`;
@@ -854,17 +867,17 @@ function renderSheet() {
   if (s.type === 'add-menu') {
     return `<div class="overlay" data-action="overlay"><div class="sheet"><div class="sheet-head"><div class="left">${cancelBtn}</div><h2>Hinzufügen</h2><div></div></div>
       <div class="sheet-body"><div class="card">
-        <button class="menu-option" data-action="open-catalog"><span class="big">🔁</span><span><strong>Habit</strong><span class="sub">Jeden Tag oder an bestimmten Wochentagen</span></span></button>
-        <button class="menu-option" data-action="new-todo"><span class="big">📌</span><span><strong>To-Do</strong><span class="sub">Einmalig, für heute oder einen anderen Tag</span></span></button>
-        <button class="menu-option" data-action="go-pool-new"><span class="big">📁</span><span><strong>Projekt</strong><span class="sub">Für größere Vorhaben mit mehreren Aufgaben</span></span></button>
+        <button class="menu-option" data-action="open-catalog"><span class="big">${pic('🔁')}</span><span><strong>Habit</strong><span class="sub">Jeden Tag oder an bestimmten Wochentagen</span></span></button>
+        <button class="menu-option" data-action="new-todo"><span class="big">${pic('📌')}</span><span><strong>To-Do</strong><span class="sub">Einmalig, für heute oder einen anderen Tag</span></span></button>
+        <button class="menu-option" data-action="go-pool-new"><span class="big">${pic('📁')}</span><span><strong>Projekt</strong><span class="sub">Für größere Vorhaben mit mehreren Aufgaben</span></span></button>
       </div></div></div></div>`;
   }
 
   if (s.type === 'catalog') {
     const names = new Set(state.habits.map((h) => h.name));
-    const body = `<div class="card" style="margin-top:6px"><div class="row"><button class="row-main" data-action="habit-from" data-name=""><span class="emoji">➕</span><span class="name" style="color:var(--accent)">Eigenes Habit erstellen</span></button></div></div>
+    const body = `<div class="card" style="margin-top:6px"><div class="row"><button class="row-main" data-action="habit-from" data-name=""><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Eigenes Habit erstellen</span></button></div></div>
       ${CATALOG.map((c) => `<h3 class="section-title">${esc(c.name)}</h3><div class="card">${c.items.map((t) => `<div class="row"><button class="row-main" data-action="habit-from" data-name="${esc(t.name)}">
-        <span class="emoji">${t.icon}</span><span class="name" style="flex:1">${esc(t.name)}</span>${names.has(t.name)
+        <span class="emoji">${pic(t.icon)}</span><span class="name" style="flex:1">${esc(t.name)}</span>${names.has(t.name)
           ? `<span class="value chosen">Schon dabei</span>${statusCircle('done')}`
           : `<span class="value">${esc(goalText(t))}</span><svg class="chevron" viewBox="0 0 8 14">${ICON.right.replace(/<\/?svg[^>]*>/g, '')}</svg>`}</button></div>`).join('')}</div>`).join('')}`;
     return sheetShell('Habit hinzufügen', cancelBtn, '', body);
@@ -891,7 +904,7 @@ function renderSheet() {
       <div class="card" style="margin-top:12px">${toggleRow('Verpasst? Am nächsten Tag nachholbar', dr.catchUp, 'data-action="draft-toggle" data-key="catchUp"')}</div>
       <p class="section-footer">Dann steht es am nächsten Tag unter „Von gestern offen“.</p>
       <h3 class="section-title">Symbol</h3>
-      <div class="card"><div class="icon-grid">${(HABIT_ICONS.includes(dr.icon) ? HABIT_ICONS : [dr.icon, ...HABIT_ICONS]).map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${i}</button>`).join('')}</div></div>
+      <div class="card"><div class="icon-grid">${(HABIT_ICONS.includes(dr.icon) ? HABIT_ICONS : [dr.icon, ...HABIT_ICONS]).map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${pic(i)}</button>`).join('')}</div></div>
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
       ${isNew ? '' : `<div class="card" style="margin-top:28px"><button class="btn-danger" data-action="delete-habit">${dr.confirmDelete ? 'Wirklich löschen? Nochmal tippen' : 'Habit löschen'}</button></div>`}`;
     return sheetShell(isNew ? 'Neues Habit' : 'Habit bearbeiten', isNew && s.fromCatalog ? '<button class="link" data-action="open-catalog">Zurück</button>' : cancelBtn,
@@ -937,7 +950,7 @@ function renderSheet() {
       <h3 class="section-title">Name</h3>
       <input class="field" id="list-name" data-field="name" value="${esc(dr.name)}" placeholder="z.B. Urlaub planen, Wohnung, Steuer" autocomplete="off" enterkeyhint="done">
       <h3 class="section-title">Symbol</h3>
-      <div class="card"><div class="icon-grid">${LIST_ICONS.map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${i}</button>`).join('')}</div></div>
+      <div class="card"><div class="icon-grid">${LIST_ICONS.map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${pic(i)}</button>`).join('')}</div></div>
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
       ${isNew ? '' : `<div class="card" style="margin-top:28px"><button class="btn-danger" data-action="delete-list">${dr.confirmDelete ? 'Projekt mit allen Aufgaben löschen?' : 'Projekt löschen'}</button></div>`}`;
     return sheetShell(isNew ? 'Neues Projekt' : 'Projekt bearbeiten', cancelBtn,
@@ -949,7 +962,7 @@ function renderSheet() {
     if (!h) return '';
     const has = getValue(h, ui.day) !== undefined;
     return `<div class="overlay center" data-action="overlay"><form class="dialog" data-form="limit-entry">
-      <div class="big">${h.icon}</div>
+      <div class="big">${pic(h.icon)}</div>
       <h3>${esc(h.name)}</h3>
       <p>Wie viel war es ${ui.day === todayKey() ? 'heute' : 'an diesem Tag'}? Limit: ${num(h.target)} ${esc(h.unit)}</p>
       <input class="field" id="limit-value" name="value" inputmode="decimal" autocomplete="off" placeholder="Wert in ${esc(h.unit)}" value="${has ? esc(num(getValue(h, ui.day))) : ''}">
@@ -967,7 +980,7 @@ function renderSheet() {
     const list = listById(t.listId);
     const others = state.todos.filter((x) => inPool(x, todayKey())).length > 1;
     return `<div class="overlay center" data-action="overlay"><div class="dialog">
-      <div class="big">${list ? list.icon : '🎲'}</div>
+      <div class="big">${pic(list ? list.icon : '🎲')}</div>
       <h3>Wie wäre es damit?</h3>
       <p style="font-size:17px;color:var(--text);margin-bottom:4px"><strong>${esc(t.title)}</strong></p>
       <p>aus „${esc(list ? list.name : '')}“</p>
