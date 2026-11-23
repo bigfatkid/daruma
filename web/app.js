@@ -314,7 +314,7 @@ function renderOnboarding() {
       <h3 class="section-title">Wie heißt du?</h3>
       <input class="field" id="ob-name" value="${esc(ob.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name" enterkeyhint="next">
       <p class="section-footer">Bleibt nur auf diesem Gerät.</p>
-      <div class="card" style="margin-top:28px"><div class="row"><label class="row-main" style="cursor:pointer"><span class="emoji">📂</span><span class="name">Ich habe schon eine Sicherung</span><input type="file" accept="application/json,.json" data-action="import" hidden></label></div></div>`;
+      <p class="ob-restore"><label>Daten wiederherstellen<input type="file" accept="application/json,.json" data-action="import" hidden></label></p>`;
     button = 'Los geht’s';
   } else if (ob.step === 1) {
     body = `<h1 class="large-title">Deine Habits</h1>
@@ -340,11 +340,9 @@ function renderOnboarding() {
       }).join('')}`;
     button = 'Weiter';
   } else {
-    const standalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
     body = `<div class="ob-hero ob-done"><div class="daruma done-daruma wobble" data-action="poke">${darumaSVG(true, true)}</div>
       <h1>Alles bereit${ob.name ? `, ${esc(ob.name)}` : ''}!</h1>
-      <p>Schaffst du an einem Tag alle Habits, bekommt Daruma sein zweites Auge. Gleich zeige ich dir kurz die App.</p></div>
-      <p class="ob-note">${standalone ? '' : 'Tipp: In Safari über Teilen → „Zum Home-Bildschirm“ wird Daruma zur App.<br>'}Deine Daten bleiben auf diesem Gerät. Eine Sicherung findest du unter Fortschritt.</p>`;
+      <p>Schaffst du an einem Tag alle Habits, bekommt Daruma sein zweites Auge. Gleich zeige ich dir kurz die App.</p></div>`;
     button = 'Los geht’s';
   }
   return `<main class="screen ob">

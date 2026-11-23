@@ -502,3 +502,5 @@ button:disabled { cursor: default; }
 
 .add-row .add-btn { flex: none; }
 .add-row input:placeholder-shown ~ .add-btn { display: none; }
+.ob-restore { text-align: center; margin: 36px 0 0; }
+.ob-restore label { color: var(--secondary); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 8px; }
