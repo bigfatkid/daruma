@@ -114,7 +114,7 @@ function normalize(s) {
     checkinV2: true,
     stepV2: true,
     // Check-in erscheint, sobald Fragen gewählt sind. Aus der kurzen Modul-Version nur übernehmen, wenn der Check-in an war.
-    checkinQuestions: Array.isArray(s.checkinQuestions) && (s.checkinV2 || (Array.isArray(s.modules) && s.modules.some((m) => m.id === 'checkin' && m.on))) ? s.checkinQuestions : [],
+    checkinQuestions: Array.isArray(s.checkinQuestions) && (s.checkinV2 || (Array.isArray(s.modules) && s.modules.some((m) => m.id === 'checkin' && m.on))) ? s.checkinQuestions.filter((q) => q.type === 'scale') : [],
     checkins: s.checkins && typeof s.checkins === 'object' ? s.checkins : {},
   };
 }
@@ -228,7 +228,8 @@ const habitById = (id) => state.habits.find((h) => h.id === id);
 const nextOrder = (arr) => arr.reduce((m, x) => Math.max(m, x.order ?? 0), -1) + 1;
 
 /* ---------- Check-in: tägliche Fragen, ausgewählt wie Habits ---------- */
-const Q_TYPES = [['scale', 'Skala 0–10'], ['yesno', 'Ja/Nein'], ['note', 'Notiz']];
+// Vorerst nur Skala-Fragen (Mattis Wunsch). Ja/Nein und Notiz sind im Code noch vorbereitet.
+const Q_TYPES = [['scale', 'Skala 0–10']];
 const qTypeLabel = (t) => (Q_TYPES.find(([k]) => k === t) || Q_TYPES[0])[1];
 const Q_CATALOG = [
   { icon: '🙂', text: 'Wie ist deine Stimmung?', type: 'scale', lo: 'schlecht', hi: 'super' },
@@ -237,11 +238,6 @@ const Q_CATALOG = [
   { icon: '🌪️', text: 'Wie gestresst bist du?', type: 'scale', lo: 'entspannt', hi: 'gestresst' },
   { icon: '🎯', text: 'Wie konzentriert warst du?', type: 'scale', lo: 'zerstreut', hi: 'fokussiert' },
   { icon: '🌤️', text: 'Wie zufrieden bist du mit deinem Tag?', type: 'scale', lo: 'unzufrieden', hi: 'sehr zufrieden' },
-  { icon: '💆', text: 'Hast du heute etwas für dich getan?', type: 'yesno' },
-  { icon: '🤕', text: 'Hattest du Kopfschmerzen?', type: 'yesno' },
-  { icon: '🍷', text: 'Hast du Alkohol getrunken?', type: 'yesno' },
-  { icon: '🙏', text: 'Wofür bist du heute dankbar?', type: 'note' },
-  { icon: '✨', text: 'Was war heute schön?', type: 'note' },
 ];
 const Q_ICONS = ['❓', '🙂', '⚡', '😴', '🌪️', '🎯', '🌤️', '💆', '🤕', '🍷', '🙏', '✨', '❤️', '🍽️', '☕', '💧'];
 
@@ -297,7 +293,7 @@ function renderQuestionCatalog() {
   const have = new Set(state.checkinQuestions.map((q) => q.text));
   const groups = Q_TYPES.map(([k, l]) => [l, Q_CATALOG.filter((q) => q.type === k)]);
   const body = `<div class="card" style="margin-top:6px"><div class="row"><button class="row-main" data-action="question-new"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Eigene Frage erstellen</span></button></div></div>
-    ${groups.map(([label, items]) => `<h3 class="section-title">${label}</h3><div class="card">${items.map((q) => `<div class="row"><button class="row-main" data-action="question-pick" data-text="${esc(q.text)}">
+    ${groups.map(([label, items]) => `${Q_TYPES.length > 1 ? `<h3 class="section-title">${label}</h3>` : `<h3 class="section-title">Vorschläge</h3>`}<div class="card">${items.map((q) => `<div class="row"><button class="row-main" data-action="question-pick" data-text="${esc(q.text)}">
       <span class="emoji">${pic(q.icon)}</span><span class="name" style="flex:1">${esc(q.text)}</span>${have.has(q.text) ? `<span class="value chosen">Schon dabei</span>${statusCircle('done')}` : `<span class="plus-mini">+</span>`}</button></div>`).join('')}</div>`).join('')}`;
   return sheetShell('Frage hinzufügen', cancelBtn, '', body);
 }
@@ -307,8 +303,8 @@ function renderQuestionEditor() {
   const body = `
     <h3 class="section-title">Frage</h3>
     <input class="field" id="q-text" data-field="text" value="${esc(dr.text)}" placeholder="z.B. Hast du genug getrunken?" autocomplete="off">
-    <h3 class="section-title">Antwort</h3>
-    <div class="card" style="padding:10px"><div class="segmented">${Q_TYPES.map(([k, l]) => `<button class="${dr.type === k ? 'on' : ''}" data-action="q-type" data-type="${k}">${l}</button>`).join('')}</div></div>
+    ${Q_TYPES.length > 1 ? `<h3 class="section-title">Antwort</h3>
+    <div class="card" style="padding:10px"><div class="segmented">${Q_TYPES.map(([k, l]) => `<button class="${dr.type === k ? 'on' : ''}" data-action="q-type" data-type="${k}">${l}</button>`).join('')}</div></div>` : ''}
     ${dr.type === 'scale' ? `<div class="card" style="margin-top:12px">
       <label class="form-row"><span>Links (0)</span><input data-field="lo" value="${esc(dr.lo)}" placeholder="wenig"></label>
       <label class="form-row"><span>Rechts (10)</span><input data-field="hi" value="${esc(dr.hi)}" placeholder="viel"></label></div>` : ''}
@@ -372,7 +368,7 @@ const ui = {
   toast: null,
   wobble: false,
   lastAllDone: {},
-  ob: { step: 0, name: '', habits: [], cfg: {}, questions: ['Wie ist deine Stimmung?', 'Wie viel Energie hast du?', 'Wie gestresst bist du?'] }, // Einrichtung
+  ob: { step: 0, name: '', habits: [], cfg: {}, questions: [] }, // Einrichtung
   tour: null, // App-Tour: Index der Station
   routines: 'habits', // Umschalter im Reiter Routinen
   checkin: null, // ungespeicherte Check-in-Antworten { day, values, dirty }
@@ -495,8 +491,8 @@ function renderOnboarding() {
     button = 'Weiter';
   } else if (ob.step === 3) {
     body = `<h1 class="large-title">Check-in</h1>
-      <p class="ob-lead">Ein paar kurze Fragen, die du einmal am Tag beantwortest. So siehst du mit der Zeit, wie es dir geht. Ein paar Beispiele sind schon ausgewählt, ändern kannst du alles später.</p>
-      ${Q_TYPES.map(([k, l]) => `<h3 class="section-title">${l}</h3><div class="card">${Q_CATALOG.filter((q) => q.type === k).map((q) => `<div class="row"><button class="row-main" data-action="ob-question" data-text="${esc(q.text)}">
+      <p class="ob-lead">Ein paar kurze Fragen, die du einmal am Tag beantwortest. So siehst du mit der Zeit, wie es dir geht. Wähle aus, was dich interessiert, ändern kannst du es später unter Routinen.</p>
+      ${Q_TYPES.map(([k, l]) => `${Q_TYPES.length > 1 ? `<h3 class="section-title">${l}</h3>` : ""}<div class="card">${Q_CATALOG.filter((q) => q.type === k).map((q) => `<div class="row"><button class="row-main" data-action="ob-question" data-text="${esc(q.text)}">
           <span class="emoji">${pic(q.icon)}</span><span class="name" style="flex:1">${esc(q.text)}</span>${pick(ob.questions.includes(q.text))}</button></div>`).join('')}</div>`).join('')}`;
     button = ob.questions.length ? `Weiter mit ${ob.questions.length} ${ob.questions.length === 1 ? 'Frage' : 'Fragen'}` : 'Ohne Check-in weiter';
   } else {
