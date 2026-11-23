@@ -1,0 +1,24 @@
+name: Build
+
+# Prüft bei jeder Änderung, ob sich die App fehlerfrei bauen lässt.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode-Version anzeigen
+        run: xcodebuild -version
+      - name: App für den Simulator bauen
+        run: |
+          xcodebuild build \
+            -project Daruma.xcodeproj \
+            -target Daruma \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO
