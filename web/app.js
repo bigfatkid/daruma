@@ -1035,8 +1035,8 @@ function renderSheet() {
       </div>` : ''}
       <h3 class="section-title">Wie oft?</h3>
       <div class="card">${freqPicker(dr, '')}</div>
-      <div class="card" style="margin-top:12px">${toggleRow('Am Folgetag nachholbar', dr.catchUp, 'data-action="draft-toggle" data-key="catchUp"')}</div>
-      <p class="section-footer">Dann steht es am nächsten Tag unter „Von gestern offen“.</p>
+      ${dr.freq === 'week' ? '' : `<div class="card" style="margin-top:12px">${toggleRow('Am Folgetag nachholbar', dr.catchUp, 'data-action="draft-toggle" data-key="catchUp"')}</div>
+      <p class="section-footer">Dann steht es am nächsten Tag unter „Von gestern offen“.</p>`}
       <h3 class="section-title">Symbol</h3>
       <div class="card"><div class="icon-grid">${(HABIT_ICONS.includes(dr.icon) ? HABIT_ICONS : [dr.icon, ...HABIT_ICONS]).map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${pic(i)}</button>`).join('')}</div></div>
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
