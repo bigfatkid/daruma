@@ -977,6 +977,14 @@ function renderPool() {
     <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="new-list"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Projekt hinzufügen</span></button></div></div>`;
 }
 
+// Kurzer Tag für die Projekt-Liste: Heute, Morgen, Do, später 4.12.
+function planLabel(d, today) {
+  if (d === today) return 'Heute';
+  if (d === addDays(today, 1)) return 'Morgen';
+  if (d <= addDays(today, 6)) return esc(fmt(d, { weekday: 'short' }));
+  return esc(fmt(d, { day: 'numeric', month: 'numeric' }));
+}
+
 function renderPoolList(list, today) {
   const items = state.todos.filter((t) => t.listId === list.id);
   const open = items.filter((t) => !t.completedAt).sort(byOrder);
@@ -993,7 +1001,7 @@ function renderPoolList(list, today) {
         return `<div class="row">
           <button class="row-main" data-action="edit-todo" data-id="${t.id}"><span class="name-wrap"><span class="name">${esc(t.title)}</span>${subsText(t) ? `<span class="tag">${subsText(t)}</span>` : ''}</span></button>
           <div class="controls">${planned
-            ? `<button class="pill filled" data-action="unplan" data-id="${t.id}">${t.plannedDay === today ? 'Heute' : esc(fmt(t.plannedDay, { weekday: 'short' }))} ✓</button>`
+            ? `<button class="pill filled" data-action="unplan" data-id="${t.id}">${planLabel(t.plannedDay, today)} ✓</button>`
             : `<button class="pill" data-action="plan-today" data-id="${t.id}">Auf Heute</button>`}</div>
         </div>`;
       }).join('')}
@@ -1003,7 +1011,7 @@ function renderPoolList(list, today) {
         <button class="pill add-btn" type="submit">Hinzufügen</button>
       </form>
     </div>
-    <p class="section-footer">Tippe auf „Auf Heute“, um dir etwas in deinen Tag zu holen. Was du nicht schaffst, landet morgen wieder hier im Projekt.</p>
+    <p class="section-footer">„Auf Heute“ holt eine Aufgabe in deinen Tag. Für einen anderen Tag auf die Aufgabe tippen. Was du nicht schaffst, landet wieder hier im Projekt.</p>
     ${done.length ? `<h3 class="section-title">Erledigt</h3><div class="card">${done.map((t) => `<div class="row">
       <span class="row-main"><span class="name struck">${esc(t.title)}</span></span>
       <div class="controls"><button class="small-link" data-action="restore" data-id="${t.id}">Zurückholen</button></div>
@@ -1128,12 +1136,12 @@ function renderSheet() {
     const body = `
       <h3 class="section-title">Was ist zu tun?</h3>
       <input class="field" id="todo-title" data-field="title" value="${esc(dr.title)}" placeholder="z.B. Malle Flüge buchen" autocomplete="off" enterkeyhint="done">
-      ${dr.isPool ? '' : `<h3 class="section-title">Wann?</h3>
+      <h3 class="section-title">Wann?</h3>
       <div class="card">
-        <div class="segmented" style="margin-bottom:10px">${[['today', 'Heute'], ['tomorrow', 'Morgen'], ['date', 'Datum']].map(([k, l]) => `<button class="${dr.when === k ? 'on' : ''}" data-action="set-when" data-when="${k}">${l}</button>`).join('')}</div>
+        <div class="segmented" style="margin-bottom:10px">${[...(dr.isPool ? [['none', 'Offen']] : []), ['today', 'Heute'], ['tomorrow', 'Morgen'], ['date', 'Datum']].map(([k, l]) => `<button class="${dr.when === k ? 'on' : ''}" data-action="set-when" data-when="${k}">${l}</button>`).join('')}</div>
         ${dr.when === 'date' ? `<label class="form-row"><span>Datum</span><input type="date" data-field="date" value="${esc(dr.date)}" min="${today}"></label>` : ''}
       </div>
-      <p class="section-footer">Nicht geschafft? Dann rutscht es automatisch auf den nächsten Tag.</p>`}
+      <p class="section-footer">${dr.isPool ? 'Am geplanten Tag steht die Aufgabe auf Heute. Nicht geschafft? Dann wartet sie wieder im Projekt.' : 'Nicht geschafft? Dann rutscht es automatisch auf den nächsten Tag.'}</p>
       ${!dr.isPool ? '' : `<h3 class="section-title">Unteraufgaben</h3>
       <div class="card">
         ${dr.subs.map((x, i) => `<div class="row">
@@ -1147,7 +1155,6 @@ function renderSheet() {
       <p class="section-footer">Große Aufgaben in kleine Schritte teilen, z.B. „Flüge vergleichen“, „Hotel buchen“.</p>`}
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
       ${isNew ? '' : `<div class="card" style="margin-top:28px">
-        ${t && t.listId && !t.completedAt && t.plannedDay && t.plannedDay >= today ? '<button class="btn-plain" style="color:var(--accent)" data-action="back-to-pool">Zurück ins Projekt</button>' : ''}
         <button class="btn-danger" data-action="delete-todo">${dr.confirmDelete ? 'Wirklich löschen? Nochmal tippen' : 'Löschen'}</button>
       </div>`}`;
     return sheetShell(isNew ? 'Neues To-Do' : (dr.isPool ? 'Aufgabe bearbeiten' : 'To-Do bearbeiten'), cancelBtn,
@@ -1368,7 +1375,7 @@ function savePicks(names) {
 function todoDraft(t) {
   const today = todayKey();
   if (!t) return { id: null, title: '', when: 'today', date: addDays(today, 2), isPool: false, subs: [], rollover: true };
-  let when = 'today';
+  let when = t.listId && (!t.plannedDay || t.plannedDay < today) ? 'none' : 'today';
   if (t.plannedDay === addDays(today, 1)) when = 'tomorrow';
   else if (t.plannedDay && t.plannedDay > addDays(today, 1)) when = 'date';
   const date = t.plannedDay && t.plannedDay > today ? t.plannedDay : addDays(today, 2);
@@ -1404,7 +1411,7 @@ function saveTodo() {
     t.subs = cleanSubs(dr.subs);
     // Tag nur ändern, wenn „Wann?“ wirklich geändert wurde (sonst ginge „seit …“ verloren)
     const whenChanged = dr.when !== dr.whenOrig || (dr.when === 'date' && dr.date !== dr.dateOrig);
-    if (!t.listId && !t.completedAt && whenChanged) t.plannedDay = plannedDay;
+    if (!t.completedAt && whenChanged) t.plannedDay = dr.when === 'none' ? null : plannedDay;
   } else {
     state.todos.push({ id: uid(), title, plannedDay, completedAt: null, createdAt: today, listId: null, order: nextOrder(state.todos), subs: cleanSubs(dr.subs) });
   }
@@ -1561,7 +1568,6 @@ const actions = {
     state.todos = state.todos.filter((t) => t.id !== ui.draft.id);
     ui.sheet = null; ui.draft = null; commit();
   },
-  'back-to-pool'() { const t = todoById(ui.draft.id); t.plannedDay = null; ui.sheet = null; ui.draft = null; persist(); toast('Zurück im Projekt'); },
 
   'open-add'() { openSheet({ type: 'add-menu' }); },
   'open-catalog'() { openSheet({ type: 'catalog' }); },
@@ -1982,7 +1988,11 @@ function applyDemoScene(scene) {
   }
   if (scene === 'yesterday') ui.day = addDays(today, -1);
   if (scene === 'pool') ui.tab = 'pool';
-  if (scene === 'poollist') { ui.tab = 'pool'; ui.poolListId = state.lists[0].id; }
+  if (scene === 'poollist' || scene === 'pooledit') {
+    ui.tab = 'pool'; ui.poolListId = state.lists[0].id;
+    state.todos[2].plannedDay = addDays(today, 3); // Lampe aufhängen für Donnerstag o.ä. geplant
+    if (scene === 'pooledit') { ui.sheet = { type: 'todo-editor' }; ui.draft = { ...todoDraft(state.todos[2]), when: 'date' }; }
+  }
   if (scene === 'surprise') { ui.tab = 'pool'; ui.sheet = { type: 'surprise', id: state.todos[6].id }; }
   if (scene === 'progress') ui.tab = 'progress';
   if (scene === 'habits') ui.tab = 'habits';
