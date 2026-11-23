@@ -85,15 +85,19 @@ function makeHabit(t, order) {
 }
 
 /* ---------- Speicher ---------- */
+// todoRollover: unerledigte To-Dos wandern auf heute (sonst verfallen sie an ihrem Tag)
+// habitCatchUp: offene Habits von gestern lassen sich heute noch nachholen
+const DEFAULT_SETTINGS = { todoRollover: true, habitCatchUp: false };
 // Neue Nutzer starten leer und werden durch die Einrichtung geführt.
 function freshState() {
-  return { version: 1, name: '', setupDone: false, habits: [], logs: {}, todos: [], lists: [] };
+  return { version: 1, name: '', setupDone: false, settings: { ...DEFAULT_SETTINGS }, habits: [], logs: {}, todos: [], lists: [] };
 }
 function normalize(s) {
   return {
     version: 1,
     name: typeof s.name === 'string' ? s.name : '',
     setupDone: s.setupDone !== false, // bestehende Daten (ohne Feld) gelten als eingerichtet
+    settings: { ...DEFAULT_SETTINGS, ...(s.settings && typeof s.settings === 'object' ? s.settings : {}) },
     habits: Array.isArray(s.habits) ? s.habits : [],
     logs: s.logs && typeof s.logs === 'object' ? s.logs : {},
     todos: Array.isArray(s.todos) ? s.todos : [],
@@ -121,7 +125,15 @@ let state = load();
 const logKey = (h, d) => `${h.id}|${d}`;
 const getValue = (h, d) => state.logs[logKey(h, d)];
 const valueOf = (h, d) => getValue(h, d) ?? 0;
-const isActive = (h, d) => h.weekdays.includes(weekday(d)) && h.createdAt <= d;
+// Wöchentliche Habits (perWeek = x-mal pro Woche) zählen nicht in den Tag, sondern in die Woche.
+const isWeekly = (h) => h.perWeek > 0;
+const isActive = (h, d) => !isWeekly(h) && h.weekdays.includes(weekday(d)) && h.createdAt <= d;
+function weekCount(h, d) {
+  const start = weekStart(d);
+  let n = 0;
+  for (let i = 0; i < 7; i++) { const k = addDays(start, i); if (k >= h.createdAt && isDone(h, k)) n++; }
+  return n;
+}
 function isDone(h, d) {
   const v = getValue(h, d);
   if (h.kind === 'check') return (v ?? 0) >= 1;
@@ -137,7 +149,18 @@ function deleteHabit(id) {
   state.habits = state.habits.filter((h) => h.id !== id);
   for (const k of Object.keys(state.logs)) if (k.startsWith(id + '|')) delete state.logs[k];
 }
+function weekStreak(h) {
+  const today = todayKey();
+  let w = weekStart(today);
+  if (weekCount(h, w) < h.perWeek) w = addDays(w, -7); // laufende Woche zählt erst, wenn geschafft
+  let n = 0;
+  for (let i = 0; i < 60 && addDays(w, 6) >= h.createdAt; i++, w = addDays(w, -7)) {
+    if (weekCount(h, w) >= h.perWeek) n++; else break;
+  }
+  return n;
+}
 function streak(h) {
+  if (isWeekly(h)) return weekStreak(h);
   const today = todayKey();
   let d = today;
   if (isActive(h, d) && !isDone(h, d)) d = addDays(d, -1);
@@ -150,6 +173,17 @@ function streak(h) {
 }
 function rate(h, days) {
   const today = todayKey();
+  if (isWeekly(h)) {
+    // abgeschlossene Wochen (plus laufende, falls schon geschafft)
+    let need = 0, got = 0;
+    for (let w = weekStart(today), i = 0; i < Math.max(1, Math.round(days / 7)); i++, w = addDays(w, -7)) {
+      if (addDays(w, 6) < h.createdAt) break;
+      const c = Math.min(weekCount(h, w), h.perWeek);
+      if (i === 0 && c < h.perWeek) continue;
+      need += h.perWeek; got += c;
+    }
+    return need ? Math.round((got / need) * 100) : null;
+  }
   let active = 0, done = 0;
   for (let i = 0; i < days; i++) {
     const d = addDays(today, -i);
@@ -166,12 +200,13 @@ function rate(h, days) {
    Pool-Einträge (listId) erscheinen nur an dem Tag, für den sie geholt wurden, danach wieder im Pool. */
 function todoAppears(t, d, today) {
   if (t.completedAt) return t.completedAt === d;
+  if (!t.listId && !state.settings.todoRollover) return t.plannedDay === d; // verfällt an seinem Tag
   if (!t.plannedDay || d < today) return false;
   if (!t.listId && d === today) return t.plannedDay <= d;
   return t.plannedDay === d;
 }
 const inPool = (t, today) => !!t.listId && !t.completedAt && (!t.plannedDay || t.plannedDay < today);
-const carriedOver = (t, today) => !t.listId && !t.completedAt && t.plannedDay && t.plannedDay < today;
+const carriedOver = (t, today) => state.settings.todoRollover && !t.listId && !t.completedAt && t.plannedDay && t.plannedDay < today;
 const listById = (id) => state.lists.find((l) => l.id === id);
 const todoById = (id) => state.todos.find((t) => t.id === id);
 const habitById = (id) => state.habits.find((h) => h.id === id);
@@ -188,7 +223,7 @@ const ui = {
   toast: null,
   wobble: false,
   lastAllDone: {},
-  ob: { step: 0, name: '', habits: [], lists: [], targets: {} }, // Einrichtung
+  ob: { step: 0, name: '', habits: [], lists: [], cfg: {}, settings: { ...DEFAULT_SETTINGS } }, // Einrichtung
 };
 
 /* ---------- Kleine Bausteine ---------- */
@@ -268,7 +303,7 @@ function render() {
 /* ---------- Einrichtung beim ersten Start ---------- */
 function renderOnboarding() {
   const ob = ui.ob;
-  const steps = 4;
+  const steps = 6;
   const dots = `<div class="ob-dots">${Array.from({ length: steps }, (_, i) => `<i class="${i === ob.step ? 'on' : ''}"></i>`).join('')}</div>`;
   const back = ob.step > 0 ? '<button class="link" data-action="ob-back">Zurück</button>' : '';
   const pick = (on) => statusCircle(on ? 'done' : 'open');
@@ -285,18 +320,31 @@ function renderOnboarding() {
     button = 'Los geht’s';
   } else if (ob.step === 1) {
     body = `<h1 class="large-title">Deine Habits</h1>
-      <p class="ob-lead">Was willst du dir jeden Tag angewöhnen? Wähle ein paar aus. Die Ziele sind nur Vorschläge, du kannst sie direkt anpassen. Ergänzen und ändern geht später im Reiter Habits.</p>
-      ${CATALOG.map((c) => `<h3 class="section-title">${esc(c.name)}</h3><div class="card">${c.items.map((t) => {
-        const on = ob.habits.includes(t.name);
-        const goal = goalText(t);
-        const tune = on && t.kind !== 'check'
-          ? `<label class="form-row ob-tune"><span>${t.kind === 'count' ? 'Dein Ziel pro Tag' : 'Höchstens pro Tag'}</span>
-              <span class="tune-input"><input data-ob-target="${esc(t.name)}" inputmode="decimal" value="${esc(ob.targets[t.name] ?? num(t.target))}"> ${esc(t.unit)}</span></label>` : '';
-        return `<div class="row"><button class="row-main" data-action="ob-habit" data-name="${esc(t.name)}">
-          <span class="emoji">${t.icon}</span><span class="name" style="flex:1">${esc(t.name)}</span>${!on || t.kind === 'check' ? `<span class="value">${esc(goal)}</span>` : ''}${pick(on)}</button></div>${tune}`;
-      }).join('')}</div>`).join('')}`;
+      <p class="ob-lead">Was willst du dir angewöhnen? Wähle ein paar aus, lieber klein anfangen. Im nächsten Schritt legst du Ziel und Häufigkeit fest.</p>
+      ${CATALOG.map((c) => `<h3 class="section-title">${esc(c.name)}</h3><div class="card">${c.items.map((t) => `<div class="row"><button class="row-main" data-action="ob-habit" data-name="${esc(t.name)}">
+          <span class="emoji">${t.icon}</span><span class="name" style="flex:1">${esc(t.name)}</span>${pick(ob.habits.includes(t.name))}</button></div>`).join('')}</div>`).join('')}
+      <p class="section-footer">Eigene Habits legst du später im Reiter Habits an.</p>`;
     button = ob.habits.length ? `Weiter mit ${ob.habits.length} Habit${ob.habits.length === 1 ? '' : 's'}` : 'Ohne Habits weiter';
   } else if (ob.step === 2) {
+    const chosen = CATALOG.flatMap((c) => c.items).filter((t) => ob.habits.includes(t.name));
+    body = `<h1 class="large-title">Feinschliff</h1>
+      <p class="ob-lead">Die Vorschläge kannst du so lassen oder an dich anpassen.</p>
+      ${chosen.map((t) => {
+        const f = ob.cfg[t.name], attr = `data-name="${esc(t.name)}"`;
+        return `<div class="card ob-cfg">
+          <div class="ob-cfg-head"><span class="emoji">${t.icon}</span><strong>${esc(t.name)}</strong><span class="value">${t.kind === 'check' ? 'Ja/Nein' : ''}</span></div>
+          ${t.kind !== 'check' ? `<label class="form-row ob-goal"><span>${t.kind === 'limit' ? 'Höchstens pro Tag' : f.freq === 'week' ? 'Ziel pro Mal' : 'Ziel pro Tag'}</span>
+            <span class="tune-input"><input data-ob-target="${esc(t.name)}" inputmode="decimal" value="${esc(f.target)}"> ${esc(t.unit)}</span></label>` : ''}
+          <div class="ob-freq">${freqPicker(f, attr)}</div>
+        </div>`;
+      }).join('')}`;
+    button = 'Weiter';
+  } else if (ob.step === 3) {
+    body = `<h1 class="large-title">Wenn etwas offen bleibt</h1>
+      <p class="ob-lead">Was soll passieren, wenn du etwas an einem Tag nicht schaffst? Ändern kannst du das später unter Fortschritt.</p>
+      ${settingsCards(ob.settings, 'ob-setting')}`;
+    button = 'Weiter';
+  } else if (ob.step === 4) {
     body = `<h1 class="large-title">Dein Pool</h1>
       <p class="ob-lead">Im Pool sammelst du Dinge, die nicht jeden Tag dran sind. Wenn du Zeit und Lust hast, holst du dir etwas davon auf Heute. Welche Listen willst du haben?</p>
       <div class="card">${LIST_SUGGESTIONS.map((l) => `<div class="row"><button class="row-main" data-action="ob-list" data-name="${esc(l.name)}">
@@ -326,19 +374,32 @@ function finishOnboarding() {
   const ob = ui.ob;
   const all = CATALOG.flatMap((c) => c.items).filter((t) => ob.habits.includes(t.name));
   all.forEach((t) => {
-    const v = parseNum(ob.targets[t.name] ?? t.target);
+    const f = ob.cfg[t.name];
+    const v = parseNum(f.target);
     const target = t.kind !== 'check' && v > 0 ? v : t.target;
     // Schrittweite passend zum eigenen Ziel, falls das Ziel kleiner als der Vorschlag-Schritt ist
     const step = t.kind === 'count' && t.step >= target ? Math.max(target / 4, 0.1) : t.step;
-    state.habits.push(makeHabit({ ...t, target, step }, nextOrder(state.habits)));
+    state.habits.push({ ...makeHabit({ ...t, target, step }, nextOrder(state.habits)), ...freqValues(f) });
   });
   LIST_SUGGESTIONS.filter((l) => ob.lists.includes(l.name))
     .forEach((l) => state.lists.push({ id: uid(), name: l.name, icon: l.icon, order: nextOrder(state.lists) }));
   state.name = ob.name.trim();
+  state.settings = { ...ob.settings };
   state.setupDone = true;
   ui.tab = 'today'; ui.day = todayKey();
   window.scrollTo(0, 0);
   commit();
+}
+
+function settingsCards(v, action) {
+  const opt = (key, val, label, sub) => `<button class="menu-option" data-action="${action}" data-key="${key}" data-val="${val ? 1 : 0}">
+    <span class="big">${statusCircle(v[key] === val ? 'done' : 'open')}</span><span><strong>${label}</strong><span class="sub">${sub}</span></span></button>`;
+  return `<h3 class="section-title">To-Dos</h3>
+    <div class="card">${opt('todoRollover', true, 'Auf den nächsten Tag schieben', 'Bleibt sichtbar, bis du es erledigst')}
+      ${opt('todoRollover', false, 'Verfallen lassen', 'Bleibt an seinem Tag stehen und taucht nicht mehr auf')}</div>
+    <h3 class="section-title">Habits</h3>
+    <div class="card">${opt('habitCatchUp', true, 'Am nächsten Tag nachholbar', 'Was gestern offen blieb, kannst du heute noch abhaken')}
+      ${opt('habitCatchUp', false, 'Verfallen lassen', 'Jeder Tag zählt für sich')}</div>`;
 }
 
 function renderTabbar() {
@@ -366,6 +427,11 @@ function renderToday() {
   const popEye = allDone && ui.lastAllDone[d] === false;
   if (popEye) ui.wobble = true;
   ui.lastAllDone[d] = allDone;
+
+  const weekly = state.habits.filter((h) => isWeekly(h) && h.createdAt <= addDays(weekStart(d), 6)).sort(byOrder);
+  const yesterday = addDays(today, -1);
+  const catchUp = state.settings.habitCatchUp && d === today
+    ? state.habits.filter((h) => h.kind !== 'limit' && isActive(h, yesterday) && !isDone(h, yesterday)).sort(byOrder) : [];
 
   const todos = state.todos
     .filter((t) => todoAppears(t, d, today))
@@ -400,6 +466,14 @@ function renderToday() {
     <div class="card">
       ${habits.length ? habits.map((h) => habitRow(h, d, future)).join('') : (state.habits.length ? '<p class="empty">An diesem Tag stehen keine Habits an.</p>' : '<p class="empty">Noch keine Habits. <button class="link" data-action="tab" data-tab="habits">Im Reiter Habits anlegen</button></p>')}
     </div>
+
+    ${weekly.length ? `<h3 class="section-title">Diese Woche</h3>
+    <div class="card">${weekly.map((h) => habitRow(h, d, future)).join('')}</div>` : ''}
+
+    ${catchUp.length ? `<h3 class="section-title">Von gestern offen</h3>
+    <div class="card">${catchUp.map((h) => `<div class="row"><div class="row-main"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span></div>
+      <div class="controls"><button class="pill" data-action="catch-up" data-id="${h.id}">Nachholen</button></div></div>`).join('')}</div>
+    <p class="section-footer">Zählt für gestern. Was du heute nicht nachholst, verfällt.</p>` : ''}
 
     <h3 class="section-title">To-Dos</h3>
     <div class="card">
@@ -451,15 +525,19 @@ function habitRow(h, d, future) {
         : `<span class="accent-text">Eintragen</span>${statusCircle('open')}`}
     </button>`;
   }
+  const label = isWeekly(h)
+    ? `<span class="name-wrap"><span class="name">${esc(h.name)}</span><span class="tag">${weekCount(h, d)}/${h.perWeek} diese Woche</span></span>`
+    : `<span class="name">${esc(h.name)}</span>`;
   return `<div class="row">
     ${h.kind !== 'limit' && !future
-      ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span></button>`
-      : `<div class="row-main"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span></div>`}
+      ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${h.icon}</span>${label}</button>`
+      : `<div class="row-main"><span class="emoji">${h.icon}</span>${label}</div>`}
     <div class="controls">${controls}</div>
   </div>`;
 }
 
 function scheduleText(h) {
+  if (isWeekly(h)) return `${h.perWeek}× pro Woche`;
   const w = h.weekdays;
   if (w.length === 7) return 'Täglich';
   if (w.length === 5 && [1, 2, 3, 4, 5].every((n) => w.includes(n))) return 'Mo–Fr';
@@ -592,11 +670,11 @@ function renderProgress() {
     const dots = [];
     for (let i = 13; i >= 0; i--) {
       const d = addDays(today, -i);
-      const cls = !isActive(h, d) ? 'off' : isDone(h, d) ? 'on' : '';
+      const cls = isDone(h, d) ? 'on' : isWeekly(h) || !isActive(h, d) ? 'off' : '';
       dots.push(`<i class="${cls}" title="${esc(fmt(d, { weekday: 'short', day: 'numeric', month: 'short' }))}"></i>`);
     }
     return `<div class="stat">
-      <div class="stat-head"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span><span class="streak">${s > 0 ? `🔥 ${s} ${s === 1 ? 'Tag' : 'Tage'}` : ''}</span></div>
+      <div class="stat-head"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span><span class="streak">${s > 0 ? `🔥 ${s} ${isWeekly(h) ? (s === 1 ? 'Woche' : 'Wochen') : (s === 1 ? 'Tag' : 'Tage')}` : ''}</span></div>
       <div class="stat-sub">Woche ${w === null ? '–' : w + ' %'} · 30 Tage ${m === null ? '–' : m + ' %'}</div>
       <div class="dots">${dots.join('')}</div>
     </div>`;
@@ -609,6 +687,9 @@ function renderProgress() {
     <h1 class="large-title">Fortschritt</h1>
     <div class="card">${rows || '<p class="empty">Noch keine Habits angelegt.</p>'}</div>
     <p class="section-footer">Serie = Tage am Stück. Die Kästchen zeigen die letzten 14 Tage. In den letzten 7 Tagen hast du ${doneTodos} ${doneTodos === 1 ? 'To-Do' : 'To-Dos'} erledigt.</p>
+
+    <div style="height:14px"></div>
+    ${settingsCards(state.settings, 'set-setting')}
 
     <h3 class="section-title">Deine Daten</h3>
     <div class="card">
@@ -667,8 +748,8 @@ function renderSheet() {
         ${dr.kind === 'count' ? `<label class="form-row"><span>Pro Tipp</span><input data-field="step" inputmode="decimal" value="${esc(dr.step)}"></label>` : ''}
         <label class="form-row"><span>Einheit</span><input data-field="unit" value="${esc(dr.unit)}" placeholder="z.B. L oder min"></label>
       </div>` : ''}
-      <h3 class="section-title">An welchen Tagen?</h3>
-      <div class="card"><div class="weekdays">${WEEKDAYS.map(([n, l]) => `<button class="${dr.weekdays.includes(n) ? 'on' : ''}" data-action="toggle-weekday" data-n="${n}">${l}</button>`).join('')}</div></div>
+      <h3 class="section-title">Wie oft?</h3>
+      <div class="card">${freqPicker(dr, '')}</div>
       <h3 class="section-title">Symbol</h3>
       <div class="card"><div class="icon-grid">${(HABIT_ICONS.includes(dr.icon) ? HABIT_ICONS : [dr.icon, ...HABIT_ICONS]).map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${i}</button>`).join('')}</div></div>
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
@@ -771,6 +852,8 @@ function habitDraft(h, template) {
     id: h ? h.id : null, name: src.name, icon: src.icon, kind: src.kind,
     target: src.kind === 'check' ? '' : num(src.target ?? 1), step: num(src.step ?? 1), unit: src.unit ?? '',
     weekdays: h ? [...h.weekdays] : [0, 1, 2, 3, 4, 5, 6],
+    freq: h && isWeekly(h) ? 'week' : h && h.weekdays.length < 7 ? 'days' : 'daily',
+    perWeek: h && isWeekly(h) ? h.perWeek : 3,
   };
 }
 
@@ -782,13 +865,29 @@ function saveHabit() {
   if (!name) return fail('Bitte gib dem Habit einen Namen.');
   if (dr.kind !== 'check' && !(target > 0)) return fail('Bitte gib einen Zielwert größer als 0 ein.');
   if (dr.kind === 'count' && !(step > 0)) return fail('Bitte gib eine Schrittweite größer als 0 ein.');
-  if (!dr.weekdays.length) return fail('Wähle mindestens einen Wochentag.');
-  const values = { name, icon: dr.icon, kind: dr.kind, target, step, unit: (dr.unit || '').trim(), weekdays: [...dr.weekdays].sort() };
+  if (dr.freq === 'days' && !dr.weekdays.length) return fail('Wähle mindestens einen Wochentag.');
+  const values = { name, icon: dr.icon, kind: dr.kind, target, step, unit: (dr.unit || '').trim(), ...freqValues(dr) };
   if (dr.id) Object.assign(habitById(dr.id), values);
   else state.habits.push({ ...makeHabit(values, nextOrder(state.habits)), ...values });
   ui.sheet = null; ui.draft = null;
   persist();
   toast(dr.id ? 'Gesichert' : `„${name}“ hinzugefügt`);
+}
+
+// Häufigkeit: täglich, an bestimmten Tagen oder x-mal pro Woche
+function freqValues(f) {
+  if (f.freq === 'week') return { weekdays: [0, 1, 2, 3, 4, 5, 6], perWeek: Math.min(6, Math.max(1, Number(f.perWeek) || 3)) };
+  if (f.freq === 'days' && f.weekdays.length) return { weekdays: [...f.weekdays].sort(), perWeek: 0 };
+  return { weekdays: [0, 1, 2, 3, 4, 5, 6], perWeek: 0 };
+}
+const FREQS = [['daily', 'Täglich'], ['days', 'Bestimmte Tage'], ['week', 'Pro Woche']];
+function freqPicker(f, attrs) {
+  return `<div class="segmented">${FREQS.map(([k, l]) => `<button class="${f.freq === k ? 'on' : ''}" data-action="set-freq" data-freq="${k}" ${attrs}>${l}</button>`).join('')}</div>
+    ${f.freq === 'days' ? `<div class="weekdays" style="margin-top:10px">${WEEKDAYS.map(([n, l]) => `<button class="${f.weekdays.includes(n) ? 'on' : ''}" data-action="toggle-weekday" data-n="${n}" ${attrs}>${l}</button>`).join('')}</div>` : ''}
+    ${f.freq === 'week' ? `<div class="form-row" style="padding:10px 2px 0"><span>Wie oft pro Woche?</span><span class="controls">
+      <button class="step" data-action="per-week" data-dir="-1" ${attrs} ${f.perWeek <= 1 ? 'disabled' : ''} aria-label="Seltener">−</button>
+      <span class="value" style="min-width:34px;text-align:center">${f.perWeek}×</span>
+      <button class="step" data-action="per-week" data-dir="1" ${attrs} ${f.perWeek >= 6 ? 'disabled' : ''} aria-label="Öfter">+</button></span></div>` : ''}`;
 }
 
 function fail(message) { ui.draft.error = message; render(); }
@@ -874,6 +973,8 @@ function importData(file) {
   reader.readAsText(file);
 }
 
+const freqTarget = (el) => (el.dataset.name ? ui.ob.cfg[el.dataset.name] : ui.draft);
+
 const actions = {
   tab(el) { ui.tab = el.dataset.tab; if (ui.tab === 'pool') ui.poolListId = null; window.scrollTo(0, 0); render(); },
   'go-today'() { ui.day = todayKey(); render(); },
@@ -882,6 +983,7 @@ const actions = {
   poke(el) { el.classList.remove('wobble'); void el.offsetWidth; el.classList.add('wobble'); },
 
   'toggle-habit'(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, isDone(h, ui.day) ? 0 : 1); commit(); },
+  'catch-up'(el) { const h = habitById(el.dataset.id); setValue(h, addDays(todayKey(), -1), h.kind === 'check' ? 1 : h.target); persist(); toast(`„${h.name}“ für gestern nachgeholt`); },
   'fill-habit'(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, isDone(h, ui.day) ? 0 : h.target); commit(); },
   step(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, Math.max(0, valueOf(h, ui.day) + Number(el.dataset.dir) * h.step)); commit(); },
   'limit-entry'(el) { openSheet({ type: 'limit-entry', id: el.dataset.id }, null, '#limit-value'); },
@@ -918,10 +1020,12 @@ const actions = {
     dr.kind = k; render();
   },
   'toggle-weekday'(el) {
-    const n = Number(el.dataset.n), w = ui.draft.weekdays;
-    ui.draft.weekdays = w.includes(n) ? w.filter((x) => x !== n) : [...w, n];
+    const f = freqTarget(el), n = Number(el.dataset.n), w = f.weekdays;
+    f.weekdays = w.includes(n) ? w.filter((x) => x !== n) : [...w, n];
     render();
   },
+  'set-freq'(el) { const f = freqTarget(el); f.freq = el.dataset.freq; if (f.freq === 'days' && f.weekdays.length === 7) f.weekdays = [1, 2, 3, 4, 5]; render(); },
+  'per-week'(el) { const f = freqTarget(el); f.perWeek = Math.min(6, Math.max(1, f.perWeek + Number(el.dataset.dir))); render(); },
   'move-habit'(el) {
     const list = [...state.habits].sort(byOrder);
     const i = list.findIndex((h) => h.id === el.dataset.id), j = i + Number(el.dataset.dir);
@@ -933,11 +1037,19 @@ const actions = {
   'ob-next'() {
     const ob = ui.ob;
     if (ob.step === 0) { const f = document.getElementById('ob-name'); ob.name = f ? f.value.trim() : ''; }
-    if (ob.step >= 3) return finishOnboarding();
-    ob.step++; window.scrollTo(0, 0); render();
+    if (ob.step >= 5) return finishOnboarding();
+    ob.step += ob.step === 1 && !ob.habits.length ? 2 : 1; // ohne Habits kein Feinschliff
+    window.scrollTo(0, 0); render();
   },
-  'ob-back'() { ui.ob.step = Math.max(0, ui.ob.step - 1); window.scrollTo(0, 0); render(); },
-  'ob-habit'(el) { const a = ui.ob.habits, n = el.dataset.name; ui.ob.habits = a.includes(n) ? a.filter((x) => x !== n) : [...a, n]; render(); },
+  'ob-back'() { const ob = ui.ob; ob.step = Math.max(0, ob.step - (ob.step === 3 && !ob.habits.length ? 2 : 1)); window.scrollTo(0, 0); render(); },
+  'ob-habit'(el) {
+    const ob = ui.ob, n = el.dataset.name;
+    ob.habits = ob.habits.includes(n) ? ob.habits.filter((x) => x !== n) : [...ob.habits, n];
+    if (!ob.cfg[n]) { const t = findTemplate(n); ob.cfg[n] = { target: t.kind === 'check' ? '' : num(t.target), freq: 'daily', weekdays: [1, 2, 3, 4, 5], perWeek: 3 }; }
+    render();
+  },
+  'ob-setting'(el) { ui.ob.settings[el.dataset.key] = el.dataset.val === '1'; render(); },
+  'set-setting'(el) { state.settings[el.dataset.key] = el.dataset.val === '1'; commit(); },
   'ob-list'(el) { const a = ui.ob.lists, n = el.dataset.name; ui.ob.lists = a.includes(n) ? a.filter((x) => x !== n) : [...a, n]; render(); },
   'set-icon'(el) { ui.draft.icon = el.dataset.icon; render(); },
   'save-habit'() { saveHabit(); },
@@ -982,7 +1094,7 @@ document.addEventListener('click', (ev) => {
 document.addEventListener('input', (ev) => {
   const el = ev.target;
   if (el.dataset && el.dataset.field && ui.draft) ui.draft[el.dataset.field] = el.value;
-  if (el.dataset && el.dataset.obTarget) ui.ob.targets[el.dataset.obTarget] = el.value;
+  if (el.dataset && el.dataset.obTarget) ui.ob.cfg[el.dataset.obTarget].target = el.value;
 });
 
 document.addEventListener('change', (ev) => {
@@ -1031,7 +1143,7 @@ setInterval(checkNewDay, 60 * 1000);
 /* ---------- Demo-Daten (nur mit ?demo=...) ---------- */
 function demoState(scene) {
   const today = todayKey();
-  const s = { version: 1, name: 'Matti', setupDone: true, habits: [], logs: {}, todos: [], lists: [] };
+  const s = { version: 1, name: 'Matti', setupDone: true, settings: { ...DEFAULT_SETTINGS, habitCatchUp: true }, habits: [], logs: {}, todos: [], lists: [] };
   const tpls = [...STARTER, findTemplate('Dehnen'), findTemplate('Lesen')];
   tpls.forEach((t, i) => {
     const h = makeHabit(t, i);
@@ -1072,7 +1184,11 @@ function applyDemoScene(scene) {
   if (scene === 'surprise') { ui.tab = 'pool'; ui.sheet = { type: 'surprise', id: state.todos[6].id }; }
   if (scene === 'progress') ui.tab = 'progress';
   if (scene === 'habits') ui.tab = 'habits';
-  if (scene.startsWith('onboarding')) { state.setupDone = false; ui.ob.step = Number(scene.slice(10)) || 0; }
+  if (scene.startsWith('onboarding')) {
+    state.setupDone = false; ui.ob.step = Number(scene.slice(10)) || 0;
+    ['Wasser trinken', 'Lesen', 'Journaling'].forEach((n) => actions['ob-habit']({ dataset: { name: n } }));
+    ui.ob.cfg.Lesen.freq = 'week';
+  }
   if (scene === 'catalog' || scene === 'editor') ui.tab = 'habits';
   if (scene === 'catalog') ui.sheet = { type: 'catalog' };
   if (scene === 'editor') { ui.sheet = { type: 'habit-editor' }; ui.draft = habitDraft(state.habits[1]); }
