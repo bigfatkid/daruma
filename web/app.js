@@ -1004,8 +1004,8 @@ function renderPoolList(list, today) {
           <button class="status-btn" data-action="pool-done" data-id="${t.id}" aria-label="Erledigt"><span class="todo-box"></span></button>
           <button class="row-main" data-action="edit-todo" data-id="${t.id}"><span class="name-wrap"><span class="name">${esc(t.title)}</span>${subsText(t) ? `<span class="tag">${subsText(t)}</span>` : ''}</span></button>
           <div class="controls">${planned
-            ? `<button class="pill filled" data-action="unplan" data-id="${t.id}">${planLabel(t.plannedDay < today ? today : t.plannedDay, today)} ✓</button>`
-            : `<button class="pill" data-action="plan-today" data-id="${t.id}">Auf Heute</button>`}</div>
+            ? `<button class="pill filled" data-action="plan-open" data-id="${t.id}">${planLabel(t.plannedDay < today ? today : t.plannedDay, today)}</button>`
+            : `<button class="pill" data-action="plan-open" data-id="${t.id}">Planen</button>`}</div>
         </div>`;
       }).join('')}
       <form class="row add-row" data-form="add-pool-item">
@@ -1014,7 +1014,7 @@ function renderPoolList(list, today) {
         <button class="pill add-btn" type="submit">Hinzufügen</button>
       </form>
     </div>
-    <p class="section-footer">„Auf Heute“ holt eine Aufgabe in deinen Tag. Für einen anderen Tag auf die Aufgabe tippen. Nicht geschafft? Dann rutscht sie auf den nächsten Tag.</p>
+    <p class="section-footer">Nicht geschafft? Dann rutscht es auf den nächsten Tag.</p>
     ${done.length ? `<h3 class="section-title">Erledigt</h3><div class="card">${done.map((t) => `<div class="row">
       <span class="row-main"><span class="name struck">${esc(t.title)}</span></span>
       <div class="controls"><button class="small-link" data-action="restore" data-id="${t.id}">Zurückholen</button></div>
@@ -1282,6 +1282,23 @@ function renderSheet() {
     </form></div>`;
   }
 
+  if (s.type === 'plan') {
+    const t = todoById(s.id);
+    if (!t) return '';
+    const today = todayKey();
+    const cur = t.plannedDay && t.plannedDay < today ? today : t.plannedDay;
+    const days = Array.from({ length: 7 }, (_, i) => addDays(today, i));
+    const label = (d, i) => i === 0 ? 'Heute' : i === 1 ? 'Morgen' : `${fmt(d, { weekday: 'short' })} ${fmt(d, { day: 'numeric' })}.`;
+    return `<div class="overlay center" data-action="overlay"><div class="dialog">
+      <h3>${esc(t.title)}</h3>
+      <div class="day-grid">${days.map((d, i) => `<button class="${cur === d ? 'on' : ''} ${i < 2 ? 'wide' : ''}" data-action="plan-set" data-day="${d}">${label(d, i)}</button>`).join('')}
+        <label class="${cur && cur > days[6] ? 'on' : ''}">${cur && cur > days[6] ? esc(fmt(cur, { day: 'numeric', month: 'numeric' })) : 'Datum'}<input type="date" data-plan-date min="${today}" value="${cur || ''}"></label></div>
+      <div class="stack">
+        ${cur ? '<button class="btn-plain" style="color:var(--accent)" data-action="plan-set" data-day="">Zurück ins Projekt</button>' : ''}
+        <button class="btn-plain" data-action="close-sheet">Abbrechen</button>
+      </div>
+    </div></div>`;
+  }
   if (s.type === 'surprise') {
     const t = todoById(s.id);
     if (!t) return '';
@@ -1487,6 +1504,15 @@ function saveTodo() {
   toast(dr.id ? 'Gesichert' : plannedDay === today ? 'Steht auf Heute' : `Geplant für ${fmt(plannedDay, { weekday: 'long' })}`);
 }
 
+function setPlan(day) {
+  const t = todoById(ui.sheet.id);
+  t.plannedDay = day;
+  ui.sheet = null;
+  persist();
+  const today = todayKey();
+  toast(!day ? 'Zurück im Projekt' : day === today ? 'Steht auf Heute' : day === addDays(today, 1) ? 'Geplant für morgen' : `Geplant für ${fmt(day, day <= addDays(today, 6) ? { weekday: 'long' } : { day: 'numeric', month: 'long' })}`);
+}
+
 function saveList() {
   const dr = ui.draft;
   const name = (dr.name || '').trim();
@@ -1624,6 +1650,8 @@ const actions = {
     if (!t.completedAt && t.listId && (!t.plannedDay || t.plannedDay < todayKey())) t.plannedDay = todayKey();
     commit();
   },
+  'plan-open'(el) { ui.sheet = { type: 'plan', id: el.dataset.id }; render(); },
+  'plan-set'(el) { setPlan(el.dataset.day || null); },
   'pool-done'(el) { todoById(el.dataset.id).completedAt = todayKey(); commit(); toast('Erledigt'); },
   'edit-todo'(el) { openSheet({ type: 'todo-editor' }, todoDraft(todoById(el.dataset.id))); },
   'focus-new-todo'() { if (ui.day < todayKey()) ui.day = todayKey(); ui.focus = '#todo-new'; render(); const el = document.getElementById('todo-new'); if (el) el.scrollIntoView({ block: 'center' }); },
@@ -1952,6 +1980,7 @@ document.addEventListener('input', (ev) => {
 document.addEventListener('change', (ev) => {
   const el = ev.target;
   if (el.dataset && el.dataset.action === 'import' && el.files && el.files[0]) importData(el.files[0]);
+  if (el.dataset && el.dataset.planDate !== undefined && el.value) setPlan(el.value < todayKey() ? todayKey() : el.value);
 });
 
 document.addEventListener('submit', (ev) => {
@@ -2057,6 +2086,7 @@ function applyDemoScene(scene) {
   }
   if (scene === 'yesterday') ui.day = addDays(today, -1);
   if (scene === 'pool') ui.tab = 'pool';
+  if (scene === 'poolplan') { ui.tab = 'pool'; ui.poolListId = state.lists[0].id; state.todos[2].plannedDay = addDays(today, 3); ui.sheet = { type: 'plan', id: state.todos[3].id }; }
   if (scene === 'poollist' || scene === 'pooledit') {
     ui.tab = 'pool'; ui.poolListId = state.lists[0].id;
     state.todos[2].plannedDay = addDays(today, 3); // Lampe aufhängen für Donnerstag o.ä. geplant
