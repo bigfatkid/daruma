@@ -723,6 +723,15 @@ function dayTitle(d, today) {
   return fmt(d, { weekday: 'long' });
 }
 
+// Daruma-Karte sagt, was noch fehlt (Review, Matti). Erklärsatz nur in der ersten Woche.
+function openText(h, t, past, total) {
+  if (!total) return past ? 'An diesem Tag stand nichts an.' : 'Heute steht nichts an.';
+  const parts = [h ? `${h} ${h === 1 ? 'Habit' : 'Habits'}` : '', t ? `${t} ${t === 1 ? 'To-Do' : 'To-Dos'}` : ''].filter(Boolean).join(' und ');
+  if (past) return `Hier fehlte${h + t === 1 ? '' : 'n'} noch ${parts}.`;
+  const firstWeek = state.firstUse && state.firstUse > addDays(todayKey(), -7);
+  return firstWeek ? `Noch ${parts}, dann malt Daruma das zweite Auge aus.` : `Noch ${parts}.`;
+}
+
 function renderToday() {
   const today = todayKey();
   const d = ui.day;
@@ -755,7 +764,7 @@ function renderToday() {
 
   const msg = future ? 'Dieser Tag kommt noch. Abhaken kannst du, wenn er da ist.'
     : allDone ? `Daruma hat beide Augen. Stark${state.name ? `, ${esc(state.name)}` : ''}!`
-    : 'Schaffst du alle, malt Daruma das zweite Auge aus.';
+    : openText(counted.filter((h) => !isDone(h, d)).length, eyeTodos.filter((t) => !t.completedAt).length, d < today, total);
 
   return `
     <div class="title-row"><h1 class="large-title">${esc(dayTitle(d, today))}</h1>${d !== today ? '<button class="link today-link" data-action="go-today">Zu heute</button>' : ''}<button class="cal-btn" data-action="open-month" aria-label="Monatsansicht"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></button></div>
