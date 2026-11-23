@@ -171,17 +171,18 @@ button:disabled { cursor: default; }
 .bar { height: 4px; border-radius: 2px; background: var(--fill); overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s; }
 
-.daruma { width: 96px; height: 116px; flex: none; cursor: pointer; }
+.daruma { width: 96px; height: 116px; flex: none; cursor: pointer; margin-left: 4px; }
+.daruma svg { overflow: visible; }
 .daruma .figure { transform-origin: 50% 92%; transform-box: view-box; }
 .daruma.wobble .figure { animation: wobble 0.95s ease-in-out; }
 .daruma .pupil2.pop { animation: pupil 0.55s cubic-bezier(.3, 1.6, .5, 1); transform-origin: 63px 39px; transform-box: view-box; }
 
 @keyframes wobble {
   0% { transform: rotate(0); }
-  15% { transform: rotate(-14deg); }
-  35% { transform: rotate(11deg); }
-  55% { transform: rotate(-7deg); }
-  75% { transform: rotate(4deg); }
+  15% { transform: rotate(-9deg); }
+  35% { transform: rotate(7deg); }
+  55% { transform: rotate(-4deg); }
+  75% { transform: rotate(2deg); }
   100% { transform: rotate(0); }
 }
 @keyframes pupil { from { transform: scale(0); } to { transform: scale(1); } }

@@ -613,6 +613,10 @@ function renderToday() {
   const popEye = allDone && ui.lastAllDone[d] === false;
   if (popEye) ui.wobble = true;
   ui.lastAllDone[d] = allDone;
+  // Daruma wackelt bei jedem Abhaken (Mattis Wunsch)
+  ui.lastDone = ui.lastDone || {};
+  if (ui.lastDone[d] !== undefined && done > ui.lastDone[d]) ui.wobble = true;
+  ui.lastDone[d] = done;
 
   const weekly = state.habits.filter((h) => isWeekly(h) && h.createdAt <= addDays(weekStart(d), 6)).sort(byOrder);
   const yesterday = addDays(today, -1);
