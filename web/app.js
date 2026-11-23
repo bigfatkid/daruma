@@ -1219,21 +1219,20 @@ function renderPickSheet() {
     .sort((x, y) => (y.a - x.a) || (x.i - y.i));
   const extras = dr.sel.filter((n) => !(h.options || []).includes(n));
   const box = (on) => `<span class="todo-box ${on ? 'on' : ''}">${on ? '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>' : ''}</span>`;
-  const chev = `<svg class="chevron" viewBox="0 0 8 14">${ICON.right.replace(/<\/?svg[^>]*>/g, '')}</svg>`;
   const row = (n, tag) => {
     const on = dr.sel.includes(n);
     return `<div class="row pick-row ${on ? 'on' : ''}"><button class="row-main" data-action="pick" data-name="${esc(n)}">
       <span class="name-wrap"><span class="name">${esc(n)}</span><span class="tag">${esc(tag)}</span></span>
-      <span class="controls">${multi ? box(on) : on ? statusCircle('done') : chev}</span></button></div>`;
+      <span class="controls">${multi ? box(on) : statusCircle(on ? 'done' : 'open')}</span></button></div>`;
   };
   const dayWord = d === todayKey() ? 'heute' : 'an diesem Tag';
-  const lead = multi ? `Was hast du ${dayWord} gemacht?${minPick(h) > 1 ? ` Mindestens ${minPick(h)}.` : ''}` : `Was hast du ${dayWord} gemacht? Am längsten her steht oben.`;
+  const lead = `Was hast du ${dayWord} gemacht?${multi && minPick(h) > 1 ? ` Mindestens ${minPick(h)}.` : ' Am längsten her steht oben.'}`;
   const other = dr.otherOpen
     ? `<form class="card pick-other" data-form="pick-other">
         <div class="pick-other-title">${multi ? 'Noch etwas anderes' : `Etwas anderes`}</div>
         <input class="field" id="pick-other" data-field="other" value="${esc(dr.other || '')}" placeholder="z.B. Klettern" autocomplete="off" enterkeyhint="done">
         <p class="pick-other-hint">Zählt ${dayWord} für ${esc(h.name)}. Taucht im Verlauf auf, kommt aber nicht dauerhaft in die Auswahl.</p>
-        ${multi ? '<button class="pill add-btn" type="submit">Hinzufügen</button>' : ''}
+        <button class="pill add-btn" type="submit">${multi ? 'Hinzufügen' : 'Übernehmen'}</button>
       </form>`
     : `<div class="card"><div class="row"><button class="row-main" data-action="pick-other-open"><span class="name-wrap"><span class="name" style="color:var(--accent)">+ Andere …</span><span class="tag">einmalig eintragen</span></span></button></div></div>`;
   const wk = isWeekly(h) ? `<p class="section-footer">${esc(h.name)}: ${h.perWeek}× pro Woche · diese Woche ${weekCount(h, d)} von ${h.perWeek}</p>` : '';
@@ -1243,8 +1242,7 @@ function renderPickSheet() {
     <div class="card">${extras.map((x) => row(x, 'einmalig')).join('')}${opts.map((o) => row(o.n, agoText(ago[o.n]))).join('')}</div>
     <div style="margin-top:10px">${other}</div>
     ${wk}
-    ${multi ? `<button class="btn-primary" style="width:100%;margin-top:16px" data-action="pick-save" ${n || had ? '' : 'disabled'}>${n ? `Fertig · ${n} gewählt` : 'Fertig'}</button>`
-      : dr.otherOpen ? '<button class="btn-primary" style="width:100%;margin-top:16px" data-action="pick-save">Abhaken</button>' : ''}
+    <button class="btn-primary" style="width:100%;margin-top:16px" data-action="pick-save" ${n || had || (dr.other || '').trim() ? '' : 'disabled'}>${multi ? (n ? `Fertig · ${n} gewählt` : 'Fertig') : 'Abhaken'}</button>
     ${had ? '<button class="btn-plain" style="width:100%;margin-top:8px;color:#ff3b30" data-action="pick-clear">Zurücksetzen</button>' : ''}`;
   return sheetShell(h.name, cancelBtn, '', body);
 }
@@ -1458,14 +1456,14 @@ const actions = {
   },
   pick(el) {
     const h = habitById(ui.sheet.id), n = el.dataset.name, dr = ui.draft;
-    if (!h.multi) return savePicks([n]);
-    dr.sel = dr.sel.includes(n) ? dr.sel.filter((x) => x !== n) : [...dr.sel, n];
+    if (!h.multi) dr.sel = dr.sel.includes(n) ? [] : [n]; // erst auswählen, abgehakt wird mit dem Knopf
+    else dr.sel = dr.sel.includes(n) ? dr.sel.filter((x) => x !== n) : [...dr.sel, n];
     render();
   },
   'pick-other-open'() { ui.draft.otherOpen = true; ui.focus = '#pick-other'; render(); },
   'pick-save'() {
     const h = habitById(ui.sheet.id), dr = ui.draft, other = (dr.other || '').trim();
-    if (!h.multi) { if (!other) { ui.focus = '#pick-other'; return render(); } return savePicks([other]); }
+    if (!h.multi) return savePicks(other ? [other] : dr.sel);
     savePicks(other ? [...dr.sel, other] : dr.sel);
   },
   'pick-clear'() { savePicks([]); },
@@ -1717,8 +1715,8 @@ document.addEventListener('submit', (ev) => {
   if (form.dataset.form === 'pick-other') {
     const dr = ui.draft, v = (dr.other || '').trim();
     if (!v) return;
-    if (!habitById(ui.sheet.id).multi) return savePicks([v]);
-    if (!dr.sel.includes(v)) dr.sel.push(v);
+    if (!habitById(ui.sheet.id).multi) dr.sel = [v];
+    else if (!dr.sel.includes(v)) dr.sel.push(v);
     dr.other = ''; dr.otherOpen = false; render();
     return;
   }
