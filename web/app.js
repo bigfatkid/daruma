@@ -810,6 +810,10 @@ function renderToday() {
   `;
 }
 
+function dayHasItems(k, today) {
+  return state.habits.some((h) => isActive(h, k) || (isWeekly(h) && h.createdAt <= k && isDone(h, k)))
+    || state.todos.some((t) => todoAppears(t, k, today) && !(k === today && carriedOver(t, today)));
+}
 function dayProgress(k, today) {
   const active = state.habits.filter((h) => isActive(h, k) || (isWeekly(h) && h.createdAt <= k && isDone(h, k)));
   const dayTodos = state.todos.filter((t) => todoAppears(t, k, today) && !(k === today && carriedOver(t, today)));
@@ -1023,7 +1027,7 @@ function renderPoolList(list, today) {
 // Regal: ein Daruma pro Monat, füllt sich von unten mit Rot je nach Augen-Tagen
 function renderShelf(today) {
   const starts = [state.firstUse, ...state.habits.map((h) => h.createdAt), ...Object.keys(state.logs).map((k) => k.split('|')[1])].filter(Boolean).sort();
-  const first = (starts[0] || today).slice(0, 7);
+  const startDay = starts[0] || today, first = startDay.slice(0, 7);
   const months = [];
   let m = today.slice(0, 7);
   while (months.length < 5) {
@@ -1040,16 +1044,18 @@ function renderShelf(today) {
   const items = months.map((mk) => {
     const [y, mo] = mk.split('-').map(Number);
     const days = new Date(y, mo, 0).getDate();
-    let eyes = 0, counted = 0;
+    // Anteilig (v74): jeder Tag zählt mit seinem Anteil (4 von 5 = 80 %), Monat = Durchschnitt
+    let sum = 0, counted = 0;
     for (let n = 1; n <= days; n++) {
       const k = `${mk}-${String(n).padStart(2, '0')}`;
       if (k > today) break;
+      if (k < startDay || !dayHasItems(k, today)) continue;
       counted++;
-      if (dayProgress(k, today) >= 1) eyes++;
+      sum += Math.min(1, dayProgress(k, today));
     }
-    const total = mk === today.slice(0, 7) ? counted : days;
+    const share = counted ? sum / counted : 0;
     const name = new Date(y, mo - 1, 1).toLocaleDateString('de-DE', { month: 'short' }).replace('.', '');
-    return { fig: figure(total ? eyes / total : 0), label: `${name} ${eyes}`, now: mk === today.slice(0, 7) };
+    return { fig: figure(share), label: `${name} ${Math.round(share * 100)} %`, now: mk === today.slice(0, 7) };
   });
   return `<div class="card shelf"><div class="shelf-row">${items.map((i) => i.fig).join('')}</div><div class="shelf-plank"></div>
     <div class="shelf-labels">${items.map((i) => `<span class="${i.now ? 'now' : ''}">${esc(i.label)}</span>`).join('')}</div></div>`;
