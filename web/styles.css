@@ -674,3 +674,11 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .hab-row.one-line .name-wrap .name { flex: none; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hab-row.one-line .name-wrap .tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .hab-row.one-line.multi-picked .name-wrap .name { white-space: normal; max-width: none; flex: 1 1 auto; line-height: 1.25; padding: 4px 0; }
+/* Erledigte Habits als Stempelreihe */
+.done-stamps { min-height: 56px; gap: 12px; align-items: center; }
+.done-label { color: var(--secondary); font-size: 14px; flex: none; }
+.stamp-list { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 0; }
+.done-stamp { position: relative; width: 36px; height: 36px; border-radius: 50%; background: #efe6d8; color: var(--accent); display: flex; align-items: center; justify-content: center; border: 0; padding: 0; }
+.done-stamp .picto { width: 18px; height: 18px; }
+.stamp-chk { position: absolute; right: -3px; bottom: -3px; width: 17px; height: 17px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; border: 2px solid var(--card, #fffaf2); }
+.stamp-chk svg { width: 9px; height: 9px; }

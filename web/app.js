@@ -716,7 +716,7 @@ function renderToday() {
 
     ${sectionHead('habits', 'Habits', habitsFolded(d, habits), counted.length ? `${counted.filter((h) => isDone(h, d)).length} von ${counted.length} erledigt` : '')}
     ${habitsFolded(d, habits) ? '' : `<div class="card">
-      ${habits.length ? habits.map((h) => habitRow(h, d, future)).join('') : (state.habits.length ? '<p class="empty">An diesem Tag stehen keine Habits an.</p>' : '<p class="empty">Noch keine Habits. <button class="link" data-action="tab" data-tab="habits">Im Reiter Routinen anlegen</button></p>')}
+      ${habits.length ? habits.filter((h) => !isDone(h, d)).map((h) => habitRow(h, d, future)).join('') + doneStamps(habits.filter((h) => isDone(h, d))) : (state.habits.length ? '<p class="empty">An diesem Tag stehen keine Habits an.</p>' : '<p class="empty">Noch keine Habits. <button class="link" data-action="tab" data-tab="habits">Im Reiter Routinen anlegen</button></p>')}
     </div>`}
 
 
@@ -805,6 +805,13 @@ function habitRow(h, d, future) {
       : `<div class="row-main"><span class="emoji">${stamp}</span>${label}</div>`}
     <div class="controls">${controls}</div>
   </div>`;
+}
+
+// Erledigte Habits als Stempelreihe (Variante C, Matti): Platz für die To-Dos
+function doneStamps(done) {
+  if (!done.length) return '';
+  const chk = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  return `<div class="row done-stamps"><span class="done-label">Erledigt</span><div class="stamp-list">${done.map((h) => `<button class="done-stamp" data-action="undo-habit" data-id="${h.id}" aria-label="${esc(h.name)} wieder öffnen" title="${esc(h.name)}">${pic(h.icon)}<span class="stamp-chk">${chk}</span></button>`).join('')}</div></div>`;
 }
 
 function scheduleText(h) {
@@ -1374,6 +1381,11 @@ const actions = {
   'shift-week'(el) { ui.day = addDays(ui.day, 7 * Number(el.dataset.n)); render(); },
   poke(el) { el.classList.remove('wobble'); void el.offsetWidth; el.classList.add('wobble'); },
 
+  'undo-habit'(el) {
+    const h = habitById(el.dataset.id), before = JSON.stringify(state);
+    if (h.kind === 'limit') delete state.logs[logKey(h, ui.day)]; else setValue(h, ui.day, 0);
+    persist(); toast(`„${h.name}“ wieder offen`, before);
+  },
   'toggle-habit'(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, isDone(h, ui.day) ? 0 : 1); commit(); },
   'catch-up'(el) { const h = habitById(el.dataset.id); setValue(h, addDays(todayKey(), -1), h.kind === 'check' ? 1 : h.target); persist(); toast(`„${h.name}“ für gestern nachgeholt`); },
   'fill-habit'(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, isDone(h, ui.day) ? 0 : h.target); commit(); },
