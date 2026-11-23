@@ -615,3 +615,6 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .hab-row.one-line .row-main { flex: 1; }
 .hab-row.one-line .name-wrap { flex: 1; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 8px; }
 .hab-row.one-line .name-wrap .tag { margin: 0; white-space: nowrap; flex: none; }
+/* Erledigte Habits: blass, durchgestrichen, Haken im Stempel; Kreis rechts bleibt (v47) */
+.hab-row.is-done .row-main { opacity: .5; }
+.hab-row.is-done .name { text-decoration: line-through; }

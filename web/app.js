@@ -731,10 +731,11 @@ function habitRow(h, d, future) {
   const label = sub
     ? `<span class="name-wrap"><span class="name">${esc(h.name)}</span><span class="tag">${sub}</span></span>`
     : `<span class="name">${esc(h.name)}</span>`;
+  const stamp = done ? '<svg class="picto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>' : pic(h.icon);
   return `<div class="row hab-row ${steps ? '' : 'one-line'} ${done ? 'is-done' : ''}">
     ${(h.kind !== 'limit' || !steps) && !future
-      ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : h.kind === 'limit' ? 'toggle-limit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${pic(h.icon)}</span>${label}</button>`
-      : `<div class="row-main"><span class="emoji">${pic(h.icon)}</span>${label}</div>`}
+      ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : h.kind === 'limit' ? 'toggle-limit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${stamp}</span>${label}</button>`
+      : `<div class="row-main"><span class="emoji">${stamp}</span>${label}</div>`}
     <div class="controls">${controls}</div>
   </div>`;
 }
