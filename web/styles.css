@@ -531,3 +531,19 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .bars i { flex: 1; background: var(--fill); border-radius: 3px; min-height: 3px; }
 .bars i.on { background: var(--accent); opacity: .85; }
 .value.chosen { color: var(--accent); font-weight: 600; }
+.plus-mini { color: var(--accent); font-size: 24px; font-weight: 400; padding: 0 6px; }
+.checkin-card { padding: 6px 16px 16px; }
+.ci-q { padding: 12px 0 4px; }
+.ci-q + .ci-q { border-top: 0.5px solid var(--separator); }
+.ci-label { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--secondary); margin-bottom: 10px; }
+.ci-val { color: var(--accent); font-size: 15px; letter-spacing: 0; }
+.ci-save { margin-top: 14px; width: 100%; }
+.ci-save.saved { background: var(--fill); color: var(--secondary); }
+.checkin-card .note-field { background: var(--fill); font-size: 16px; }
+.slider { -webkit-appearance: none; appearance: none; width: 100%; height: 30px; background: transparent; margin: 0; }
+.slider::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: var(--fill); }
+.slider::-moz-range-track { height: 6px; border-radius: 3px; background: var(--fill); }
+.slider::-webkit-slider-thumb { -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); margin-top: -11px; box-shadow: 0 1px 4px rgba(0,0,0,.25); border: 3px solid #fff; }
+.slider::-moz-range-thumb { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); border: 3px solid #fff; }
+.slider.unset::-webkit-slider-thumb { background: var(--secondary); opacity: .6; }
+.slider.unset::-moz-range-thumb { background: var(--secondary); opacity: .6; }

@@ -33,12 +33,12 @@ const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0);
 // Namen ohne Mengen. Mengen stehen immer im Ziel (bearbeitbar), Ja/Nein-Habits haben keins.
 const CATALOG = [
   { name: 'Körper', items: [
-    { name: 'Wasser trinken', icon: '💧', kind: 'count', target: 3, step: 0.5, unit: 'L' },
-    { name: 'Schritte', icon: '🚶', kind: 'count', target: 10000, step: 1000, unit: 'Schritte' },
+    { name: 'Wasser trinken', icon: '💧', kind: 'count', target: 3, step: 0.5, unit: 'L', fixedGoal: true },
+    { name: 'Schritte', icon: '🚶', kind: 'count', target: 10000, step: 1000, unit: 'Schritte', fixedGoal: true },
     { name: 'Sport', icon: '🏃', kind: 'count', target: 30, step: 10, unit: 'min' },
     { name: 'Dehnen', icon: '🤸', kind: 'count', target: 10, step: 5, unit: 'min' },
     { name: 'Obst oder Gemüse', icon: '🥕', kind: 'count', target: 400, step: 100, unit: 'g' },
-    { name: 'Schlafdauer', icon: '🛏️', kind: 'count', target: 8, step: 0.5, unit: 'h' },
+    { name: 'Schlafdauer', icon: '🛏️', kind: 'count', target: 8, step: 0.5, unit: 'h', fixedGoal: true },
   ] },
   { name: 'Geist', items: [
     { name: 'Lesen', icon: '📖', kind: 'count', target: 10, step: 5, unit: 'Seiten' },
@@ -85,7 +85,7 @@ const rollsOver = () => true;
 function freshState() {
   return { version: 1, name: '', setupDone: false, catchUpV2: true, habits: [], logs: {}, todos: [], lists: [], ...moduleDefaults() };
 }
-const moduleDefaults = () => ({ modules: ['quote', 'checkin', 'journal'].map((id) => ({ id, on: false })), checkinQuestions: null, checkins: {}, journal: {} });
+const moduleDefaults = () => ({ checkinV2: true, checkinQuestions: [], checkins: {} });
 function normalize(s) {
   // Einmalig: Standard für "Habits nachholen" ist jetzt aus. Kurz zuvor gesetzte Werte zurücksetzen.
   if (!s.catchUpV2 && Array.isArray(s.habits)) s.habits.forEach((h) => { delete h.catchUp; });
@@ -99,16 +99,11 @@ function normalize(s) {
     logs: s.logs && typeof s.logs === 'object' ? s.logs : {},
     todos: Array.isArray(s.todos) ? s.todos : [],
     lists: Array.isArray(s.lists) ? s.lists : [],
-    modules: normModules(s.modules),
-    checkinQuestions: Array.isArray(s.checkinQuestions) ? s.checkinQuestions : null,
+    checkinV2: true,
+    // Check-in erscheint, sobald Fragen gewählt sind. Aus der kurzen Modul-Version nur übernehmen, wenn der Check-in an war.
+    checkinQuestions: Array.isArray(s.checkinQuestions) && (s.checkinV2 || (Array.isArray(s.modules) && s.modules.some((m) => m.id === 'checkin' && m.on))) ? s.checkinQuestions : [],
     checkins: s.checkins && typeof s.checkins === 'object' ? s.checkins : {},
-    journal: s.journal && typeof s.journal === 'object' ? s.journal : {},
   };
-}
-function normModules(m) {
-  const list = Array.isArray(m) ? m.filter((x) => x && ['quote', 'checkin', 'journal'].includes(x.id)) : [];
-  ['quote', 'checkin', 'journal'].forEach((id) => { if (!list.some((x) => x.id === id)) list.push({ id, on: false }); });
-  return list.map((x) => ({ id: x.id, on: !!x.on }));
 }
 function load() {
   if (DEMO) return demoState(DEMO);
@@ -126,7 +121,6 @@ function persist(s = state) {
 }
 
 let state = load();
-if (!state.checkinQuestions) state.checkinQuestions = defaultQuestions();
 
 /* ---------- Habit-Logik ---------- */
 const logKey = (h, d) => `${h.id}|${d}`;
@@ -220,156 +214,131 @@ const todoById = (id) => state.todos.find((t) => t.id === id);
 const habitById = (id) => state.habits.find((h) => h.id === id);
 const nextOrder = (arr) => arr.reduce((m, x) => Math.max(m, x.order ?? 0), -1) + 1;
 
-/* ---------- Module (Extras): Zitat des Tages, Check-in, Journal ---------- */
-const MODULES = {
-  quote: { icon: '💬', name: 'Zitat des Tages', desc: 'Jeden Tag ein kurzer Gedanke zum Mitnehmen.' },
-  checkin: { icon: '🙂', name: 'Check-in', desc: 'Ein paar kurze Fragen zu deinem Tag, z.B. Stimmung und Energie.' },
-  journal: { icon: '📓', name: 'Journal', desc: 'Ein paar Zeilen pro Tag, mit Rückblick auf früher.' },
-};
-const MODULE_IDS = Object.keys(MODULES);
-const Q_TYPES = [['scale', 'Skala 1–10'], ['yesno', 'Ja/Nein'], ['note', 'Notiz']];
-function defaultQuestions() {
-  return [
-    { id: uid(), text: 'Wie ist deine Stimmung?', type: 'scale' },
-    { id: uid(), text: 'Wie viel Energie hast du?', type: 'scale' },
-    { id: uid(), text: 'Wie gut hast du geschlafen?', type: 'scale' },
-    { id: uid(), text: 'Wie gestresst bist du?', type: 'scale' },
-  ];
-}
-const QUOTES = [
-  ['Fall siebenmal hin, steh achtmal auf.', 'Japanisches Sprichwort'],
-  ['Auch eine Reise von tausend Meilen beginnt mit dem ersten Schritt.', 'Laozi'],
-  ['Steter Tropfen höhlt den Stein.', 'Sprichwort'],
-  ['Es ist nicht genug zu wissen, man muss auch anwenden; es ist nicht genug zu wollen, man muss auch tun.', 'Johann Wolfgang von Goethe'],
-  ['Nicht weil es schwer ist, wagen wir es nicht, sondern weil wir es nicht wagen, ist es schwer.', 'Seneca'],
-  ['Es ist nicht wenig Zeit, die wir haben, sondern es ist viel Zeit, die wir nicht nutzen.', 'Seneca'],
-  ['Das Glück deines Lebens hängt von der Beschaffenheit deiner Gedanken ab.', 'Marc Aurel'],
-  ['Die beste Zeit, einen Baum zu pflanzen, war vor zwanzig Jahren. Die nächstbeste Zeit ist jetzt.', 'Chinesisches Sprichwort'],
-  ['In der Ruhe liegt die Kraft.', 'Sprichwort'],
-  ['Gut Ding will Weile haben.', 'Sprichwort'],
-  ['Und jedem Anfang wohnt ein Zauber inne.', 'Hermann Hesse'],
-  ['Man muss das Unmögliche versuchen, um das Mögliche zu erreichen.', 'Hermann Hesse'],
-  ['Mut steht am Anfang des Handelns, Glück am Ende.', 'Demokrit'],
-  ['Wer ein Warum zum Leben hat, erträgt fast jedes Wie.', 'Friedrich Nietzsche'],
-  ['Ein Lächeln ist die kürzeste Verbindung zwischen zwei Menschen.', 'Victor Borge'],
-  ['Man sieht nur mit dem Herzen gut. Das Wesentliche ist für die Augen unsichtbar.', 'Antoine de Saint-Exupéry'],
-  ['Leben ist das, was passiert, während du eifrig dabei bist, andere Pläne zu machen.', 'John Lennon'],
-  ['Das Leben ist wie Fahrradfahren. Um die Balance zu halten, musst du in Bewegung bleiben.', 'Albert Einstein'],
-  ['Wer nicht genießt, ist ungenießbar.', 'Konstantin Wecker'],
-  ['Nichts ist so beständig wie der Wandel.', 'Heraklit'],
-  ['Wer aufhört, besser zu werden, hat aufgehört, gut zu sein.', 'Philip Rosenthal'],
-  ['Mach es wie die Sonnenuhr, zähl die heitren Stunden nur.', 'Sprichwort'],
-  ['Kleine Taten, die man ausführt, sind besser als große, die man plant.', 'George C. Marshall'],
-  ['Gewohnheiten sind zuerst Spinnweben, dann Drahtseile.', 'Spanisches Sprichwort'],
-  ['Die Gewohnheit ist eine zweite Natur.', 'Cicero'],
-  ['Glück ist das Einzige, das sich verdoppelt, wenn man es teilt.', 'Albert Schweitzer'],
-  ['Die Welt gehört dem, der sie genießt.', 'Giacomo Leopardi'],
-  ['Man entdeckt keine neuen Weltteile, ohne den Mut zu haben, alte Küsten aus den Augen zu verlieren.', 'André Gide'],
-  ['Der Langsamste, der sein Ziel nicht aus den Augen verliert, geht noch immer geschwinder als jener, der ohne Ziel umherirrt.', 'Gotthold Ephraim Lessing'],
-  ['Genieße die kleinen Dinge, denn eines Tages wirst du zurückblicken und erkennen, dass sie die großen waren.', 'Robert Brault'],
-  ['Eile mit Weile.', 'Sprichwort'],
-  ['Übung macht den Meister.', 'Sprichwort'],
-  ['Wer kämpft, kann verlieren. Wer nicht kämpft, hat schon verloren.', 'Bertolt Brecht'],
-  ['Alle Dinge sind schwer, bevor sie leicht werden.', 'Thomas Fuller'],
-  ['Heute ist der erste Tag vom Rest deines Lebens.', 'Charles Dederich'],
-  ['Geduld ist bitter, aber ihre Frucht ist süß.', 'Jean-Jacques Rousseau'],
-  ['Wir sind, was wir wiederholt tun. Vortrefflichkeit ist daher keine Handlung, sondern eine Gewohnheit.', 'Will Durant über Aristoteles'],
-  ['Phantasie ist wichtiger als Wissen, denn Wissen ist begrenzt.', 'Albert Einstein'],
-  ['Wer immer nur vorwärts schaut, übersieht, wie weit er schon gekommen ist.', 'Unbekannt'],
-  ['Es ist nur ein schlechter Tag, kein schlechtes Leben.', 'Unbekannt'],
-  ['Der Weg entsteht beim Gehen.', 'Antonio Machado'],
-  ['Wo ein Wille ist, ist auch ein Weg.', 'Sprichwort'],
-  ['Was du heute kannst besorgen, das verschiebe nicht auf morgen.', 'Sprichwort'],
-  ['Freude ist die einfachste Form der Dankbarkeit.', 'Karl Barth'],
-  ['Wer Großes versucht, ist bewundernswert, auch wenn er fällt.', 'Seneca'],
-  ['Jeder Tag ist ein kleines Leben.', 'Arthur Schopenhauer'],
+/* ---------- Check-in: tägliche Fragen, ausgewählt wie Habits ---------- */
+const Q_TYPES = [['scale', 'Skala 0–10'], ['yesno', 'Ja/Nein'], ['note', 'Notiz']];
+const qTypeLabel = (t) => (Q_TYPES.find(([k]) => k === t) || Q_TYPES[0])[1];
+const Q_CATALOG = [
+  { icon: '🙂', text: 'Wie ist deine Stimmung?', type: 'scale', lo: 'schlecht', hi: 'super' },
+  { icon: '⚡', text: 'Wie viel Energie hast du?', type: 'scale', lo: 'leer', hi: 'voll da' },
+  { icon: '😴', text: 'Wie gut hast du geschlafen?', type: 'scale', lo: 'schlecht', hi: 'erholt' },
+  { icon: '🌪️', text: 'Wie gestresst bist du?', type: 'scale', lo: 'entspannt', hi: 'gestresst' },
+  { icon: '🎯', text: 'Wie konzentriert warst du?', type: 'scale', lo: 'zerstreut', hi: 'fokussiert' },
+  { icon: '🌤️', text: 'Wie zufrieden bist du mit deinem Tag?', type: 'scale', lo: 'unzufrieden', hi: 'sehr zufrieden' },
+  { icon: '💆', text: 'Hast du heute etwas für dich getan?', type: 'yesno' },
+  { icon: '🤕', text: 'Hattest du Kopfschmerzen?', type: 'yesno' },
+  { icon: '🍷', text: 'Hast du Alkohol getrunken?', type: 'yesno' },
+  { icon: '🙏', text: 'Wofür bist du heute dankbar?', type: 'note' },
+  { icon: '✨', text: 'Was war heute schön?', type: 'note' },
 ];
-const quoteFor = (d) => QUOTES[Math.round(parseDay(d).getTime() / 864e5) % QUOTES.length];
+const Q_ICONS = ['❓', '🙂', '⚡', '😴', '🌪️', '🎯', '🌤️', '💆', '🤕', '🍷', '🙏', '✨', '❤️', '🍽️', '☕', '💧'];
 
-const moduleOn = (id) => (state.modules || []).some((m) => m.id === id && m.on);
 const checkinFor = (d) => state.checkins[d] || {};
-const answered = (q, v) => v !== undefined && v !== null && v !== '';
+const answered = (v) => v !== undefined && v !== null && v !== '';
 function checkinStatus(d) {
-  const qs = state.checkinQuestions;
-  const a = checkinFor(d);
+  const qs = state.checkinQuestions, a = checkinFor(d);
   const need = qs.filter((q) => q.type !== 'note');
-  return { done: qs.filter((q) => answered(q, a[q.id])).length, total: qs.length, complete: need.length > 0 && need.every((q) => answered(q, a[q.id])) };
+  return { done: qs.filter((q) => answered(a[q.id])).length, total: qs.length, complete: need.length > 0 && need.every((q) => answered(a[q.id])) };
 }
 
-// Karten auf Heute: in der Reihenfolge der Einstellungen. Zeilen-Module teilen sich eine Karte.
-function renderModules(d, today) {
-  const future = d > today;
-  const out = [];
-  let rows = [];
-  const flush = () => { if (rows.length) { out.push(`<div class="card module-card">${rows.join('')}</div>`); rows = []; } };
-  (state.modules || []).filter((m) => m.on).forEach((m) => {
-    if (m.id === 'quote') {
-      flush();
-      const [text, by] = quoteFor(d);
-      out.push(`<div class="card quote-card"><span class="module-label">${MODULES.quote.icon} Zitat des Tages</span><p class="quote">„${esc(text)}“</p><span class="quote-by">${esc(by)}</span></div>`);
-    } else if (!future && m.id === 'checkin' && state.checkinQuestions.length) {
-      const s = checkinStatus(d);
-      rows.push(`<div class="row"><button class="row-main" data-action="open-checkin"><span class="emoji">${MODULES.checkin.icon}</span>
-        <span class="name-wrap"><span class="name">Check-in</span><span class="tag">${s.done ? `${s.done} von ${s.total} beantwortet` : d === today ? 'Wie geht’s dir heute?' : 'Noch nichts eingetragen'}</span></span></button>
-        <div class="controls"><button class="status-btn" data-action="open-checkin" aria-label="Check-in öffnen">${statusCircle(s.complete ? 'done' : 'open', s.total ? s.done / s.total : 0)}</button></div></div>`);
-    } else if (!future && m.id === 'journal') {
-      const text = state.journal[d] || '';
-      rows.push(`<div class="row"><button class="row-main" data-action="open-journal"><span class="emoji">${MODULES.journal.icon}</span>
-        <span class="name-wrap"><span class="name">Journal</span><span class="tag">${text ? esc(text.length > 48 ? text.slice(0, 46) + '…' : text) : 'Ein paar Zeilen zu deinem Tag'}</span></span></button>
-        <div class="controls"><button class="status-btn" data-action="open-journal" aria-label="Journal öffnen">${statusCircle(text ? 'done' : 'open')}</button></div></div>`);
-    }
-  });
-  flush();
-  return out.length ? `<div class="modules">${out.join('')}</div>` : '';
+// Karte auf Heute (nur wenn Fragen ausgewählt sind): alle Fragen untereinander, speichern per Button
+function checkinDraft(d) {
+  if (!ui.checkin || ui.checkin.day !== d) ui.checkin = { day: d, values: { ...checkinFor(d) }, dirty: false };
+  return ui.checkin;
 }
-
-function renderCheckinSheet() {
-  const d = ui.day, a = checkinFor(d);
-  const body = state.checkinQuestions.map((q) => {
+function renderCheckinCard(d, today) {
+  if (d > today || !state.checkinQuestions.length) return '';
+  const dr = checkinDraft(d), a = dr.values;
+  const saved = !dr.dirty && Object.keys(checkinFor(d)).length > 0;
+  const qs = state.checkinQuestions.map((q) => {
     const v = a[q.id];
     let input;
     if (q.type === 'scale') {
-      input = `<div class="scale">${Array.from({ length: 10 }, (_, i) => i + 1).map((n) => `<button class="${v === n ? 'on' : ''}" data-action="checkin-set" data-q="${q.id}" data-v="${n}">${n}</button>`).join('')}</div>
-        <div class="scale-legend"><span>wenig</span><span>viel</span></div>`;
+      input = `<input type="range" class="slider ${answered(v) ? '' : 'unset'}" min="0" max="10" step="1" value="${answered(v) ? v : 5}" data-checkin-range="${q.id}" aria-label="${esc(q.text)}">
+        <div class="scale-legend"><span>${esc(q.lo || 'wenig')}</span><span>${esc(q.hi || 'viel')}</span></div>`;
     } else if (q.type === 'yesno') {
       input = `<div class="segmented">${[[true, 'Ja'], [false, 'Nein']].map(([b, l]) => `<button class="${v === b ? 'on' : ''}" data-action="checkin-set" data-q="${q.id}" data-v="${b}">${l}</button>`).join('')}</div>`;
     } else {
-      input = `<textarea class="field note-field" data-checkin-note="${q.id}" rows="3" placeholder="Ein paar Worte …">${esc(v || '')}</textarea>`;
+      input = `<textarea class="field note-field" data-checkin-note="${q.id}" rows="2" placeholder="Ein paar Worte …">${esc(v || '')}</textarea>`;
     }
-    return `<h3 class="section-title">${esc(q.text)}</h3><div class="${q.type === 'note' ? '' : 'card checkin-q'}">${input}</div>`;
+    return `<div class="ci-q"><div class="ci-label"><span>${esc(q.text)}</span>${q.type === 'scale' ? `<span class="ci-val" data-val-for="${q.id}">${answered(v) ? v : '–'}/10</span>` : ''}</div>${input}</div>`;
   }).join('');
-  return sheetShell(`Check-in · ${d === todayKey() ? 'Heute' : fmt(d, { weekday: 'short', day: 'numeric', month: 'short' })}`, '',
-    '<button class="link" style="font-weight:600" data-action="close-sheet">Fertig</button>',
-    `${body}<p class="section-footer">Wird sofort gespeichert. Fragen änderst du unter Fortschritt → Zahnrad → Check-in.</p>`);
+  return `<h3 class="section-title">Check-in</h3><div class="card checkin-card">${qs}
+    <button class="btn-primary ci-save ${saved ? 'saved' : ''}" data-action="checkin-save">${saved ? 'Gespeichert ✓' : 'Check-in speichern'}</button></div>`;
 }
 
-function renderJournalSheet() {
-  const d = ui.day;
-  const back = [[addDays(d, -7), 'Vor einer Woche'], [dayKey(new Date(parseDay(d).setMonth(parseDay(d).getMonth() - 1))), 'Heute vor einem Monat'],
-    [dayKey(new Date(parseDay(d).setFullYear(parseDay(d).getFullYear() - 1))), 'Heute vor einem Jahr']].filter(([k]) => state.journal[k]);
+// Abschnitt im Reiter Habits
+function renderQuestionList() {
+  const qs = state.checkinQuestions;
+  return `<h3 class="section-title">Check-in-Fragen</h3>
+    ${qs.length ? `<div class="card">${qs.map((q, i) => `<div class="row">
+      <button class="row-main" data-action="edit-question" data-id="${q.id}"><span class="emoji">${q.icon || '❓'}</span>
+        <span class="name-wrap"><span class="name">${esc(q.text)}</span><span class="tag">${qTypeLabel(q.type)}</span></span></button>
+      <div class="controls order-btns">
+        <button class="step" data-action="q-move" data-id="${q.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Nach oben">↑</button>
+        <button class="step" data-action="q-move" data-id="${q.id}" data-dir="1" ${i === qs.length - 1 ? 'disabled' : ''} aria-label="Nach unten">↓</button>
+      </div></div>`).join('')}</div>` : ''}
+    <p class="section-footer">${qs.length ? 'Die Fragen beantwortest du täglich auf Heute.' : 'Kurze Fragen zu deinem Tag, z.B. Stimmung oder Schlaf. Sobald du eine auswählst, erscheint der Check-in auf Heute.'}</p>
+    <div class="card" style="margin-top:12px"><div class="row"><button class="row-main" data-action="open-q-catalog"><span class="emoji">➕</span><span class="name" style="color:var(--accent)">Frage hinzufügen</span></button></div></div>`;
+}
+
+function renderQuestionCatalog() {
+  const have = new Set(state.checkinQuestions.map((q) => q.text));
+  const groups = Q_TYPES.map(([k, l]) => [l, Q_CATALOG.filter((q) => q.type === k)]);
+  const body = `<div class="card" style="margin-top:6px"><div class="row"><button class="row-main" data-action="question-new"><span class="emoji">➕</span><span class="name" style="color:var(--accent)">Eigene Frage erstellen</span></button></div></div>
+    ${groups.map(([label, items]) => `<h3 class="section-title">${label}</h3><div class="card">${items.map((q) => `<div class="row"><button class="row-main" data-action="question-pick" data-text="${esc(q.text)}">
+      <span class="emoji">${q.icon}</span><span class="name" style="flex:1">${esc(q.text)}</span>${have.has(q.text) ? `<span class="value chosen">Schon dabei</span>${statusCircle('done')}` : `<span class="plus-mini">+</span>`}</button></div>`).join('')}</div>`).join('')}`;
+  return sheetShell('Frage hinzufügen', cancelBtn, '', body);
+}
+
+function renderQuestionEditor() {
+  const dr = ui.draft, isNew = !dr.id;
   const body = `
-    <h3 class="section-title">${esc(d === todayKey() ? 'Heute' : fmt(d, { weekday: 'long', day: 'numeric', month: 'long' }))}</h3>
-    <textarea class="field journal-field" id="journal-text" data-journal="${d}" rows="8" placeholder="Was war heute schön? Was hat dich beschäftigt? Was nimmst du mit?">${esc(state.journal[d] || '')}</textarea>
-    <p class="section-footer">Wird automatisch gespeichert.</p>
-    ${back.map(([k, label]) => `<h3 class="section-title">${label}</h3><div class="card memory"><span class="tag">${esc(fmt(k, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</span><p>${esc(state.journal[k])}</p></div>`).join('')}`;
-  return sheetShell('Journal', '', '<button class="link" style="font-weight:600" data-action="close-sheet">Fertig</button>', body);
+    <h3 class="section-title">Frage</h3>
+    <input class="field" id="q-text" data-field="text" value="${esc(dr.text)}" placeholder="z.B. Hast du genug getrunken?" autocomplete="off">
+    <h3 class="section-title">Antwort</h3>
+    <div class="card" style="padding:10px"><div class="segmented">${Q_TYPES.map(([k, l]) => `<button class="${dr.type === k ? 'on' : ''}" data-action="q-type" data-type="${k}">${l}</button>`).join('')}</div></div>
+    ${dr.type === 'scale' ? `<div class="card" style="margin-top:12px">
+      <label class="form-row"><span>Links (0)</span><input data-field="lo" value="${esc(dr.lo)}" placeholder="wenig"></label>
+      <label class="form-row"><span>Rechts (10)</span><input data-field="hi" value="${esc(dr.hi)}" placeholder="viel"></label></div>` : ''}
+    <p class="section-footer">${dr.type === 'scale' ? 'Du schiebst einen Regler von 0 bis 10. Die Wörter stehen links und rechts darunter.' : dr.type === 'yesno' ? 'Du antwortest mit Ja oder Nein.' : 'Du schreibst ein paar freie Worte.'}</p>
+    <h3 class="section-title">Symbol</h3>
+    <div class="card"><div class="icon-grid">${(Q_ICONS.includes(dr.icon) ? Q_ICONS : [dr.icon, ...Q_ICONS]).map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${i}</button>`).join('')}</div></div>
+    ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
+    ${isNew ? '' : `<div class="card" style="margin-top:28px"><button class="btn-danger" data-action="q-del">${dr.confirmDelete ? 'Wirklich entfernen? Nochmal tippen' : 'Frage entfernen'}</button></div>`}`;
+  return sheetShell(isNew ? 'Eigene Frage' : 'Frage bearbeiten', isNew ? '<button class="link" data-action="open-q-catalog">Zurück</button>' : cancelBtn,
+    `<button class="link" style="font-weight:600" data-action="save-question">${isNew ? 'Hinzufügen' : 'Sichern'}</button>`, body);
+}
+function saveQuestion() {
+  const dr = ui.draft, text = (dr.text || '').trim();
+  if (!text) return fail('Bitte schreib die Frage auf.');
+  const values = { text, type: dr.type, icon: dr.icon, lo: (dr.lo || '').trim() || 'wenig', hi: (dr.hi || '').trim() || 'viel' };
+  if (dr.id) Object.assign(state.checkinQuestions.find((q) => q.id === dr.id), values);
+  else state.checkinQuestions.push({ id: uid(), ...values });
+  ui.sheet = null; ui.draft = null;
+  persist();
+  toast(dr.id ? 'Gesichert' : 'Frage hinzugefügt');
+}
+
+// Auswertung für Fortschritt
+function renderCheckinStats(today) {
+  const rows = state.checkinQuestions.filter((q) => q.type !== 'note').map((q) => {
+    const vals = (n) => Array.from({ length: n }, (_, i) => checkinFor(addDays(today, -i))[q.id]).filter(answered);
+    const head = `<div class="stat-head"><span class="emoji">${q.icon || '❓'}</span><span class="name">${esc(q.text)}</span></div>`;
+    if (q.type === 'scale') {
+      const avg = (a) => (a.length ? num(a.reduce((s, x) => s + x, 0) / a.length) : '–');
+      const bars = Array.from({ length: 14 }, (_, i) => checkinFor(addDays(today, i - 13))[q.id]).map((v) => `<i style="height:${answered(v) ? Math.max(v * 10, 4) : 4}%" class="${answered(v) ? 'on' : ''}"></i>`).join('');
+      return `<div class="stat">${head}<div class="stat-sub">Ø 7 Tage ${avg(vals(7))} · Ø 30 Tage ${avg(vals(30))}</div><div class="bars">${bars}</div></div>`;
+    }
+    const w = vals(7);
+    return `<div class="stat">${head}<div class="stat-sub">Ja an ${w.filter((v) => v === true).length} von ${w.length} Tagen (letzte 7 Tage)</div></div>`;
+  }).join('');
+  return rows ? `<h3 class="section-title">Check-in</h3><div class="card">${rows}</div><p class="section-footer">Die Balken zeigen die letzten 14 Tage.</p>` : '';
 }
 
 function renderSettingsSheet() {
-  const mods = state.modules;
   const body = `
     <h3 class="section-title">Dein Name</h3>
     <input class="field" id="settings-name" data-setting="name" value="${esc(state.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name">
-    <h3 class="section-title">Module</h3>
-    <div class="card">${mods.map((m, i) => `<div class="module-row">
-      ${toggleRow(`<span class="emoji">${MODULES[m.id].icon}</span><span class="name-wrap"><span class="name">${MODULES[m.id].name}</span><span class="tag">${MODULES[m.id].desc}</span></span>`, m.on, `data-action="module-toggle" data-id="${m.id}"`)}
-      <div class="controls order-btns">
-        <button class="step" data-action="module-move" data-id="${m.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Nach oben">↑</button>
-        <button class="step" data-action="module-move" data-id="${m.id}" data-dir="1" ${i === mods.length - 1 ? 'disabled' : ''} aria-label="Nach unten">↓</button>
-      </div></div>`).join('')}
-    </div>
-    <p class="section-footer">Eingeschaltete Module erscheinen auf Heute, in dieser Reihenfolge.</p>
-    ${moduleOn('checkin') ? `<div class="card" style="margin-top:12px"><div class="row"><button class="row-main" data-action="edit-questions"><span class="emoji">${MODULES.checkin.icon}</span><span class="name" style="flex:1">Check-in-Fragen</span><span class="value">${state.checkinQuestions.length}</span><svg class="chevron" viewBox="0 0 8 14">${ICON.right.replace(/<\/?svg[^>]*>/g, '')}</svg></button></div></div>` : ''}
     <h3 class="section-title">Deine Daten</h3>
     <div class="card">
       <div class="row"><button class="row-main" data-action="export"><span class="emoji">💾</span><span class="name">Sicherung herunterladen</span></button></div>
@@ -378,56 +347,6 @@ function renderSettingsSheet() {
     <p class="section-footer">Alles bleibt nur auf diesem Gerät gespeichert. Eine Sicherung ab und zu schadet nicht.</p>
     <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="tour-start"><span class="emoji">🧭</span><span class="name">App-Tour noch mal ansehen</span></button></div></div>`;
   return sheetShell('Einstellungen', '', '<button class="link" style="font-weight:600" data-action="close-sheet">Fertig</button>', body);
-}
-
-function renderQuestionsSheet() {
-  const dr = ui.draft;
-  const qs = state.checkinQuestions;
-  const label = (t) => Q_TYPES.find(([k]) => k === t)[1];
-  const body = `
-    <div class="card" style="margin-top:6px">${qs.length ? qs.map((q, i) => `<div class="row">
-      <span class="row-main"><span class="name-wrap"><span class="name">${esc(q.text)}</span><span class="tag">${label(q.type)}</span></span></span>
-      <div class="controls order-btns">
-        <button class="step" data-action="q-move" data-id="${q.id}" data-dir="-1" ${i === 0 ? 'disabled' : ''} aria-label="Nach oben">↑</button>
-        <button class="small-link" data-action="q-del" data-id="${q.id}" aria-label="Entfernen">✕</button>
-      </div></div>`).join('') : '<p class="empty">Noch keine Fragen.</p>'}
-    </div>
-    <h3 class="section-title">Neue Frage</h3>
-    <form class="card" data-form="add-question">
-      <div class="form-row"><input id="q-new" class="q-input" placeholder="z.B. Hast du heute etwas für dich getan?" autocomplete="off" enterkeyhint="done"></div>
-      <div style="padding:4px 10px 12px"><div class="segmented">${Q_TYPES.map(([k, l]) => `<button type="button" class="${dr.qtype === k ? 'on' : ''}" data-action="q-type" data-type="${k}">${l}</button>`).join('')}</div></div>
-      <div style="padding:0 10px 12px"><button class="btn-primary small" type="submit" style="width:100%">Frage hinzufügen</button></div>
-    </form>
-    <p class="section-footer">Skala: 1 bis 10 antippen. Ja/Nein: eine Antwort. Notiz: ein paar freie Worte.</p>
-    ${qs.length ? '' : '<div class="card" style="margin-top:12px"><button class="btn-plain" style="color:var(--accent)" data-action="q-defaults">Vorschläge einfügen</button></div>'}`;
-  return sheetShell('Check-in-Fragen', '<button class="link" data-action="open-settings">Zurück</button>', '', body);
-}
-
-// Auswertung für Fortschritt
-function renderModuleStats(today) {
-  const parts = [];
-  if (moduleOn('checkin')) {
-    const rows = state.checkinQuestions.filter((q) => q.type !== 'note').map((q) => {
-      const vals = (n) => Array.from({ length: n }, (_, i) => checkinFor(addDays(today, -i))[q.id]).filter((v) => answered(q, v));
-      if (q.type === 'scale') {
-        const avg = (a) => (a.length ? num(a.reduce((s, x) => s + x, 0) / a.length) : '–');
-        const w = vals(7), m = vals(30);
-        const bars = Array.from({ length: 14 }, (_, i) => checkinFor(addDays(today, i - 13))[q.id]).map((v) => `<i style="height:${v ? v * 10 : 4}%" class="${v ? 'on' : ''}"></i>`).join('');
-        return `<div class="stat"><div class="stat-head"><span class="emoji">${q.type === 'scale' ? '📈' : '☑️'}</span><span class="name">${esc(q.text)}</span></div>
-          <div class="stat-sub">Ø 7 Tage ${avg(w)} · Ø 30 Tage ${avg(m)}</div><div class="bars">${bars}</div></div>`;
-      }
-      const w = vals(7);
-      return `<div class="stat"><div class="stat-head"><span class="emoji">${q.type === 'scale' ? '📈' : '☑️'}</span><span class="name">${esc(q.text)}</span></div>
-        <div class="stat-sub">Ja an ${w.filter((v) => v === true).length} von ${w.length} Tagen (letzte 7 Tage)</div></div>`;
-    }).join('');
-    if (rows) parts.push(`<h3 class="section-title">Check-in</h3><div class="card">${rows}</div><p class="section-footer">Die Balken zeigen die letzten 14 Tage.</p>`);
-  }
-  if (moduleOn('journal')) {
-    const n30 = Array.from({ length: 30 }, (_, i) => state.journal[addDays(today, -i)]).filter(Boolean).length;
-    const total = Object.values(state.journal).filter(Boolean).length;
-    parts.push(`<h3 class="section-title">Journal</h3><div class="card"><div class="stat"><div class="stat-head"><span class="emoji">📓</span><span class="name">${total} ${total === 1 ? 'Eintrag' : 'Einträge'} insgesamt</span></div><div class="stat-sub">${n30} in den letzten 30 Tagen</div></div></div>`);
-  }
-  return parts.join('');
 }
 
 /* ---------- UI-Zustand ---------- */
@@ -441,8 +360,9 @@ const ui = {
   toast: null,
   wobble: false,
   lastAllDone: {},
-  ob: { step: 0, name: '', habits: [], cfg: {}, modules: {} }, // Einrichtung
+  ob: { step: 0, name: '', habits: [], cfg: {} }, // Einrichtung
   tour: null, // App-Tour: Index der Station
+  checkin: null, // ungespeicherte Check-in-Antworten { day, values, dirty }
 };
 
 /* ---------- Kleine Bausteine ---------- */
@@ -523,7 +443,7 @@ function render() {
 /* ---------- Einrichtung beim ersten Start ---------- */
 function renderOnboarding() {
   const ob = ui.ob;
-  const steps = 5;
+  const steps = 4;
   const dots = `<div class="ob-dots">${Array.from({ length: steps }, (_, i) => `<i class="${i === ob.step ? 'on' : ''}"></i>`).join('')}</div>`;
   const back = ob.step > 0 ? '<button class="link" data-action="ob-back">Zurück</button>' : '';
   const pick = (on) => statusCircle(on ? 'done' : 'open');
@@ -552,7 +472,7 @@ function renderOnboarding() {
         const f = ob.cfg[t.name], attr = `data-name="${esc(t.name)}"`;
         return `<div class="card ob-cfg">
           <div class="ob-cfg-head"><span class="emoji">${t.icon}</span><strong>${esc(t.name)}</strong><span class="value">${t.kind === 'check' || f.noGoal ? 'Ja/Nein' : ''}</span></div>
-          ${t.kind !== 'check' ? toggleRow('Mit Ziel', !f.noGoal, `data-action="ob-toggle" data-name="${esc(t.name)}" data-key="noGoal"`) : ''}
+          ${t.kind === 'count' && !t.fixedGoal ? toggleRow('Mit Ziel', !f.noGoal, `data-action="ob-toggle" data-name="${esc(t.name)}" data-key="noGoal"`) : ''}
           ${t.kind !== 'check' && !f.noGoal ? `<label class="form-row ob-goal"><span>${t.kind === 'limit' ? 'Höchstens pro Tag' : f.freq === 'week' ? 'Ziel pro Mal' : 'Ziel pro Tag'}</span>
             <span class="tune-input"><input data-ob-target="${esc(t.name)}" inputmode="decimal" value="${esc(f.target)}"> ${esc(t.unit)}</span></label>` : ''}
           <div class="ob-freq">${freqPicker(f, attr)}</div>
@@ -560,11 +480,6 @@ function renderOnboarding() {
         </div>`;
       }).join('')}`;
     button = 'Weiter';
-  } else if (ob.step === 3) {
-    body = `<h1 class="large-title">Extras</h1>
-      <p class="ob-lead">Wenn du magst, ergänzt du Daruma um ein paar Extras. Alles freiwillig, ändern kannst du es jederzeit unter Fortschritt beim Zahnrad.</p>
-      <div class="card">${MODULE_IDS.map((id) => toggleRow(`<span class="emoji">${MODULES[id].icon}</span><span class="name-wrap"><span class="name">${MODULES[id].name}</span><span class="tag">${MODULES[id].desc}</span></span>`, !!ob.modules[id], `data-action="ob-module" data-id="${id}"`)).join('')}</div>`;
-    button = MODULE_IDS.some((id) => ob.modules[id]) ? 'Weiter' : 'Ohne Extras weiter';
   } else {
     body = `<div class="ob-hero ob-done"><div class="daruma done-daruma wobble" data-action="poke">${darumaSVG(true, true)}</div>
       <h1>Alles bereit${ob.name ? `, ${esc(ob.name)}` : ''}!</h1>
@@ -590,7 +505,6 @@ function finishOnboarding() {
     const tpl = f.noGoal ? { ...t, kind: 'check', target: 1, step: 1, unit: '' } : { ...t, target, step };
     state.habits.push({ ...makeHabit(tpl, nextOrder(state.habits)), ...freqValues(f), catchUp: !!f.catchUp });
   });
-  state.modules.forEach((m) => { m.on = !!ob.modules[m.id]; });
   state.name = ob.name.trim();
   state.setupDone = true;
   ui.tab = 'today'; ui.day = todayKey(); ui.tour = 0;
@@ -605,9 +519,9 @@ function toggleRow(label, on, attrs) {
 /* ---------- App-Tour (einmal nach dem ersten Start) ---------- */
 const TOUR = [
   ['today', 'Heute', 'Hier hakst du deine Habits ab und erledigst To-Dos. Neue To-Dos tippst du direkt in die Liste, oben wechselst du zwischen den Tagen.'],
-  ['habits', 'Habits', 'Hier legst du Habits an, änderst Ziel und Häufigkeit und bestimmst die Reihenfolge.'],
+  ['habits', 'Habits', 'Hier legst du Habits an, änderst Ziel und Häufigkeit und bestimmst die Reihenfolge. Unten wählst du Fragen für deinen täglichen Check-in.'],
   ['pool', 'Projekte', 'Für größere Vorhaben: Lege Projekte an, sammle Aufgaben mit Unteraufgaben und hol dir bei Lust etwas auf Heute.'],
-  ['progress', 'Fortschritt', 'Serien und Quoten für jedes Habit. Oben rechts beim Zahnrad findest du Einstellungen, Module und deine Sicherung.'],
+  ['progress', 'Fortschritt', 'Serien und Quoten für jedes Habit. Oben rechts beim Zahnrad findest du Einstellungen und deine Sicherung.'],
 ];
 function renderTour() {
   if (ui.tour === null || ui.sheet) return '';
@@ -682,8 +596,6 @@ function renderToday() {
       </div>
     </div>
 
-    ${renderModules(d, today)}
-
     <h3 class="section-title">Habits</h3>
     <div class="card">
       ${habits.length ? habits.map((h) => habitRow(h, d, future)).join('') : (state.habits.length ? '<p class="empty">An diesem Tag stehen keine Habits an.</p>' : '<p class="empty">Noch keine Habits. <button class="link" data-action="tab" data-tab="habits">Im Reiter Habits anlegen</button></p>')}
@@ -696,6 +608,8 @@ function renderToday() {
     <div class="card">${catchUp.map((h) => `<div class="row"><div class="row-main"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span></div>
       <div class="controls"><button class="pill" data-action="catch-up" data-id="${h.id}">Nachholen</button></div></div>`).join('')}</div>
     <p class="section-footer">Zählt für gestern. Was du heute nicht nachholst, verfällt. Pro Habit einstellbar.</p>` : ''}
+
+    ${renderCheckinCard(d, today)}
 
     <h3 class="section-title">To-Dos</h3>
     <div class="card">
@@ -786,7 +700,8 @@ function renderHabits() {
       <h2>Noch keine Habits</h2>
       <p>Such dir etwas aus dem Katalog aus oder leg ein eigenes Habit an. Abgehakt wird dann im Reiter Heute.</p>
       <button class="btn-primary" data-action="open-catalog">Habit hinzufügen</button>
-    </div>`;
+    </div>
+    ${renderQuestionList()}`;
   }
   return `${head}
     <div class="card">${habits.map((h, i) => `<div class="row">
@@ -800,7 +715,8 @@ function renderHabits() {
       </div>
     </div>`).join('')}</div>
     <p class="section-footer">Tippe auf ein Habit, um es zu bearbeiten. Mit den Pfeilen legst du die Reihenfolge auf Heute fest.</p>
-    <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="open-catalog"><span class="emoji">➕</span><span class="name" style="color:var(--accent)">Habit hinzufügen</span></button></div></div>`;
+    <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="open-catalog"><span class="emoji">➕</span><span class="name" style="color:var(--accent)">Habit hinzufügen</span></button></div></div>
+    ${renderQuestionList()}`;
 }
 
 function todoRow(t, today, future) {
@@ -914,7 +830,7 @@ function renderProgress() {
     <div class="card">${rows || '<p class="empty">Noch keine Habits angelegt.</p>'}</div>
     <p class="section-footer">Serie = Tage am Stück. Die Kästchen zeigen die letzten 14 Tage. In den letzten 7 Tagen hast du ${doneTodos} ${doneTodos === 1 ? 'To-Do' : 'To-Dos'} erledigt.</p>
 
-    ${renderModuleStats(today)}
+    ${renderCheckinStats(today)}
   `;
 }
 
@@ -933,9 +849,8 @@ function renderSheet() {
   const dr = ui.draft || {};
 
   if (s.type === 'settings') return renderSettingsSheet();
-  if (s.type === 'questions') return renderQuestionsSheet();
-  if (s.type === 'checkin') return renderCheckinSheet();
-  if (s.type === 'journal') return renderJournalSheet();
+  if (s.type === 'q-catalog') return renderQuestionCatalog();
+  if (s.type === 'q-editor') return renderQuestionEditor();
   if (s.type === 'add-menu') {
     return `<div class="overlay" data-action="overlay"><div class="sheet"><div class="sheet-head"><div class="left">${cancelBtn}</div><h2>Hinzufügen</h2><div></div></div>
       <div class="sheet-body"><div class="card">
@@ -1217,7 +1132,6 @@ function importData(file) {
       const data = normalize(JSON.parse(reader.result));
       if (!data.habits.length && !data.todos.length) throw new Error('leer');
       data.setupDone = true;
-      if (!data.checkinQuestions) data.checkinQuestions = defaultQuestions();
       state = data;
       ui.tab = 'today'; ui.day = todayKey();
       persist();
@@ -1302,7 +1216,7 @@ const actions = {
   'ob-next'() {
     const ob = ui.ob;
     if (ob.step === 0) { const f = document.getElementById('ob-name'); ob.name = f ? f.value.trim() : ''; }
-    if (ob.step >= 4) return finishOnboarding();
+    if (ob.step >= 3) return finishOnboarding();
     ob.step += ob.step === 1 && !ob.habits.length ? 2 : 1; // ohne Habits kein Feinschliff
     window.scrollTo(0, 0); render();
   },
@@ -1342,31 +1256,40 @@ const actions = {
   'surprise-take'() { todoById(ui.sheet.id).plannedDay = todayKey(); ui.sheet = null; persist(); toast('Steht jetzt auf Heute'); },
 
   'open-settings'() { openSheet({ type: 'settings' }); },
-  'module-toggle'(el) { const m = state.modules.find((x) => x.id === el.dataset.id); m.on = !m.on; commit(); },
-  'module-move'(el) {
-    const list = state.modules, i = list.findIndex((m) => m.id === el.dataset.id), j = i + Number(el.dataset.dir);
-    if (j < 0 || j >= list.length) return;
-    [list[i], list[j]] = [list[j], list[i]]; commit();
+  'open-q-catalog'() { openSheet({ type: 'q-catalog' }); },
+  'question-pick'(el) {
+    const text = el.dataset.text;
+    if (state.checkinQuestions.some((q) => q.text === text)) return;
+    const t = Q_CATALOG.find((q) => q.text === text);
+    state.checkinQuestions.push({ id: uid(), text: t.text, type: t.type, icon: t.icon });
+    persist(); toast('Frage hinzugefügt');
   },
-  'ob-module'(el) { ui.ob.modules[el.dataset.id] = !ui.ob.modules[el.dataset.id]; render(); },
-  'edit-questions'() { openSheet({ type: 'questions' }, { qtype: 'scale' }); },
-  'q-type'(el) { const inp = document.getElementById('q-new'); const v = inp ? inp.value : ''; ui.draft.qtype = el.dataset.type; render(); const n = document.getElementById('q-new'); if (n && v) n.value = v; },
-  'q-del'(el) { state.checkinQuestions = state.checkinQuestions.filter((q) => q.id !== el.dataset.id); commit(); },
+  'question-new'() { openSheet({ type: 'q-editor' }, { id: null, text: '', type: 'scale', icon: '❓', lo: 'wenig', hi: 'viel' }, '#q-text'); },
+  'edit-question'(el) { const q = state.checkinQuestions.find((x) => x.id === el.dataset.id); openSheet({ type: 'q-editor' }, { id: q.id, text: q.text, type: q.type, icon: q.icon || '❓', lo: q.lo || 'wenig', hi: q.hi || 'viel' }); },
+  'save-question'() { saveQuestion(); },
+  'q-type'(el) { ui.draft.type = el.dataset.type; render(); },
+  'q-del'() {
+    if (!ui.draft.confirmDelete) { ui.draft.confirmDelete = true; return render(); }
+    state.checkinQuestions = state.checkinQuestions.filter((q) => q.id !== ui.draft.id);
+    ui.sheet = null; ui.draft = null; commit();
+  },
   'q-move'(el) {
     const list = state.checkinQuestions, i = list.findIndex((q) => q.id === el.dataset.id), j = i + Number(el.dataset.dir);
     if (j < 0 || j >= list.length) return;
     [list[i], list[j]] = [list[j], list[i]]; commit();
   },
-  'q-defaults'() { state.checkinQuestions = defaultQuestions(); commit(); },
-  'open-checkin'() { openSheet({ type: 'checkin' }); },
-  'open-journal'() { openSheet({ type: 'journal' }, null, '#journal-text'); },
   'checkin-set'(el) {
-    const d = ui.day, q = el.dataset.q, raw = el.dataset.v;
-    const v = raw === 'true' ? true : raw === 'false' ? false : Number(raw);
-    const a = state.checkins[d] || (state.checkins[d] = {});
-    if (a[q] === v) delete a[q]; else a[q] = v;
-    commit();
+    const dr = checkinDraft(ui.day), q = el.dataset.q, v = el.dataset.v === 'true';
+    if (dr.values[q] === v) delete dr.values[q]; else dr.values[q] = v;
+    dr.dirty = true; render();
   },
+  'checkin-save'() {
+    const dr = checkinDraft(ui.day), clean = {};
+    Object.entries(dr.values).forEach(([k, v]) => { if (answered(v)) clean[k] = v; });
+    if (Object.keys(clean).length) state.checkins[ui.day] = clean; else delete state.checkins[ui.day];
+    dr.dirty = false; persist(); toast('Check-in gespeichert');
+  },
+
   export() { exportData(); },
   'close-sheet'() { closeSheet(); },
   overlay(el, ev) { if (ev.target === el) closeSheet(); },
@@ -1386,14 +1309,16 @@ document.addEventListener('input', (ev) => {
   if (el.dataset && el.dataset.field && ui.draft) ui.draft[el.dataset.field] = el.value;
   if (el.dataset && el.dataset.obTarget) ui.ob.cfg[el.dataset.obTarget].target = el.value;
   if (el.dataset && el.dataset.setting === 'name') { state.name = el.value.trim(); persist(); }
-  if (el.dataset && el.dataset.journal) {
-    if (el.value.trim()) state.journal[el.dataset.journal] = el.value; else delete state.journal[el.dataset.journal];
-    persist();
-  }
-  if (el.dataset && el.dataset.checkinNote) {
-    const a = state.checkins[ui.day] || (state.checkins[ui.day] = {});
-    if (el.value.trim()) a[el.dataset.checkinNote] = el.value; else delete a[el.dataset.checkinNote];
-    persist();
+  if (el.dataset && (el.dataset.checkinNote || el.dataset.checkinRange)) {
+    const dr = checkinDraft(ui.day);
+    if (el.dataset.checkinNote) dr.values[el.dataset.checkinNote] = el.value.trim() ? el.value : undefined;
+    else {
+      dr.values[el.dataset.checkinRange] = Number(el.value);
+      el.classList.remove('unset');
+      const lab = document.querySelector(`[data-val-for="${el.dataset.checkinRange}"]`);
+      if (lab) lab.textContent = `${el.value}/10`;
+    }
+    if (!dr.dirty) { dr.dirty = true; const b = document.querySelector('.ci-save'); if (b) { b.classList.remove('saved'); b.textContent = 'Check-in speichern'; } }
   }
 });
 
@@ -1406,15 +1331,6 @@ document.addEventListener('submit', (ev) => {
   const form = ev.target;
   ev.preventDefault();
   if (form.dataset.form === 'add-sub') { addSub(); return; }
-  if (form.dataset.form === 'add-question') {
-    const input = document.getElementById('q-new');
-    const text = input.value.trim();
-    if (!text) return;
-    state.checkinQuestions.push({ id: uid(), text, type: ui.draft.qtype || 'scale' });
-    ui.focus = '#q-new';
-    commit();
-    return;
-  }
   if (form.dataset.form === 'add-todo') {
     const input = form.querySelector('input');
     const title = input.value.trim();
@@ -1449,6 +1365,7 @@ document.addEventListener('keydown', (ev) => {
   if (ui.sheet.type === 'todo-editor') saveTodo();
   else if (ui.sheet.type === 'list-editor') saveList();
   else if (ui.sheet.type === 'habit-editor') saveHabit();
+  else if (ui.sheet.type === 'q-editor') saveQuestion();
 });
 
 // Neuer Tag, während die App offen ist
@@ -1464,13 +1381,6 @@ setInterval(checkNewDay, 60 * 1000);
 function demoState(scene) {
   const today = todayKey();
   const s = { version: 1, name: 'Matti', setupDone: true, tourDone: true, habits: [], logs: {}, todos: [], lists: [], ...moduleDefaults() };
-  s.checkinQuestions = defaultQuestions();
-  if (/modules|checkin|journal|settings|progress/.test(scene)) {
-    s.modules.forEach((m) => { m.on = true; });
-    for (let o = 0; o < 20; o++) { const a = {}; s.checkinQuestions.forEach((q, i) => { if (o || i < 2) a[q.id] = 4 + ((o * 3 + i * 5) % 6); }); s.checkins[addDays(today, -o)] = a; }
-    s.journal[addDays(today, -7)] = 'Langer Spaziergang am See, danach mit Laura gekocht. Guter Tag.';
-    s.journal[addDays(today, -1)] = 'Viel geschafft im Büro, abends noch 20 Minuten gelesen.';
-  }
   const tpls = [...STARTER, findTemplate('Dehnen'), findTemplate('Lesen')];
   tpls.forEach((t, i) => {
     const h = makeHabit(t, i);
@@ -1505,6 +1415,10 @@ function demoState(scene) {
 
 function applyDemoScene(scene) {
   const today = todayKey();
+  if (/checkin|progress|habits/.test(scene)) {
+    state.checkinQuestions = Q_CATALOG.slice(0, 4).map((q) => ({ id: uid(), ...q }));
+    for (let o = 0; o < 20; o++) { const a = {}; state.checkinQuestions.forEach((q, i) => { if (o || i < 2) a[q.id] = 4 + ((o * 3 + i * 5) % 6); }); state.checkins[addDays(today, -o)] = a; }
+  }
   if (scene === 'yesterday') ui.day = addDays(today, -1);
   if (scene === 'pool') ui.tab = 'pool';
   if (scene === 'poollist') { ui.tab = 'pool'; ui.poolListId = state.lists[0].id; }
@@ -1523,9 +1437,9 @@ function applyDemoScene(scene) {
   if (scene === 'todo') { ui.sheet = { type: 'todo-editor' }; ui.draft = { ...todoDraft(null), title: 'Zahnarzttermin machen', when: 'tomorrow' }; }
   if (scene === 'alldone') ui.lastAllDone[today] = false;
   if (scene === 'settings') { ui.tab = 'progress'; ui.sheet = { type: 'settings' }; }
-  if (scene === 'questions') { ui.tab = 'progress'; ui.sheet = { type: 'questions' }; ui.draft = { qtype: 'scale' }; }
+  if (scene === 'qcatalog') { ui.tab = 'habits'; ui.sheet = { type: 'q-catalog' }; }
+  if (scene === 'checkinhome') ui.tab = 'today';
   if (scene === 'checkin') ui.sheet = { type: 'checkin' };
-  if (scene === 'journal') { ui.sheet = { type: 'journal' }; state.journal[today] = ''; }
 }
 
 /* ---------- Start ---------- */
