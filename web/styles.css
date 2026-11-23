@@ -559,3 +559,4 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .toggle-row > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .toggle-row > span:first-child .tag { white-space: normal; }
 .toggle-row > span:first-child { font-size: 16px; }
+.routine-switch { margin: 0 0 18px; }

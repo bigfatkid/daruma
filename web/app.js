@@ -279,11 +279,10 @@ function renderCheckinCard(d, today) {
     <button class="btn-primary ci-save ${saved ? 'saved' : ''}" data-action="checkin-save">${saved ? 'Gespeichert ✓' : 'Check-in speichern'}</button></div>`;
 }
 
-// Abschnitt im Reiter Habits
+// Abschnitt Check-in im Reiter Routinen
 function renderQuestionList() {
   const qs = state.checkinQuestions;
-  return `<h3 class="section-title">Check-in-Fragen</h3>
-    ${qs.length ? `<div class="card">${qs.map((q, i) => `<div class="row">
+  return `${qs.length ? `<div class="card">${qs.map((q, i) => `<div class="row">
       <button class="row-main" data-action="edit-question" data-id="${q.id}"><span class="emoji">${pic(q.icon || '❓')}</span>
         <span class="name-wrap"><span class="name">${esc(q.text)}</span><span class="tag">${qTypeLabel(q.type)}</span></span></button>
       <div class="controls order-btns">
@@ -291,7 +290,7 @@ function renderQuestionList() {
         <button class="step" data-action="q-move" data-id="${q.id}" data-dir="1" ${i === qs.length - 1 ? 'disabled' : ''} aria-label="Nach unten">↓</button>
       </div></div>`).join('')}</div>` : ''}
     <p class="section-footer">${qs.length ? 'Die Fragen beantwortest du täglich auf Heute.' : 'Kurze Fragen zu deinem Tag, z.B. Stimmung oder Schlaf. Sobald du eine auswählst, erscheint der Check-in auf Heute.'}</p>
-    <div class="card" style="margin-top:12px"><div class="row"><button class="row-main" data-action="open-q-catalog"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Frage hinzufügen</span></button></div></div>`;
+    <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="open-q-catalog"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Frage hinzufügen</span></button></div></div>`;
 }
 
 function renderQuestionCatalog() {
@@ -375,6 +374,7 @@ const ui = {
   lastAllDone: {},
   ob: { step: 0, name: '', habits: [], cfg: {}, questions: ['Wie ist deine Stimmung?', 'Wie viel Energie hast du?', 'Wie gestresst bist du?'] }, // Einrichtung
   tour: null, // App-Tour: Index der Station
+  routines: 'habits', // Umschalter im Reiter Routinen
   checkin: null, // ungespeicherte Check-in-Antworten { day, values, dirty }
 };
 
@@ -475,7 +475,7 @@ function renderOnboarding() {
       <p class="ob-lead">Hier ist eine Vorauswahl beliebter Habits für den Start. Wähle aus, was zu dir passt, lieber erst mal wenige. Im nächsten Schritt legst du Ziel und Häufigkeit fest.</p>
       ${CATALOG.map((c) => `<h3 class="section-title">${esc(c.name)}</h3><div class="card">${c.items.map((t) => `<div class="row"><button class="row-main" data-action="ob-habit" data-name="${esc(t.name)}">
           <span class="emoji">${pic(t.icon)}</span><span class="name" style="flex:1">${esc(t.name)}</span>${pick(ob.habits.includes(t.name))}</button></div>`).join('')}</div>`).join('')}
-      <p class="section-footer">Nicht dabei, was du suchst? Eigene Habits legst du nach der Einrichtung im Reiter Habits an.</p>`;
+      <p class="section-footer">Nicht dabei, was du suchst? Eigene Habits legst du nach der Einrichtung im Reiter Routinen an.</p>`;
     button = ob.habits.length ? `Weiter mit ${ob.habits.length} Habit${ob.habits.length === 1 ? '' : 's'}` : 'Ohne Habits weiter';
   } else if (ob.step === 2) {
     const chosen = CATALOG.flatMap((c) => c.items).filter((t) => ob.habits.includes(t.name));
@@ -539,7 +539,7 @@ function toggleRow(label, on, attrs) {
 /* ---------- App-Tour (einmal nach dem ersten Start) ---------- */
 const TOUR = [
   ['today', 'Heute', 'Hier hakst du deine Habits ab und erledigst To-Dos. Neue To-Dos tippst du direkt in die Liste, oben wechselst du zwischen den Tagen.'],
-  ['habits', 'Habits', 'Hier legst du Habits an, änderst Ziel und Häufigkeit und bestimmst die Reihenfolge. Unten wählst du Fragen für deinen täglichen Check-in.'],
+  ['habits', 'Routinen', 'Hier verwaltest du deine Habits und die Fragen für den täglichen Check-in. Oben schaltest du zwischen beiden um.'],
   ['pool', 'Projekte', 'Für größere Vorhaben: Lege Projekte an, sammle Aufgaben mit Unteraufgaben und hol dir bei Lust etwas auf Heute.'],
   ['progress', 'Fortschritt', 'Serien und Quoten für jedes Habit. Oben rechts beim Zahnrad findest du Einstellungen und deine Sicherung.'],
 ];
@@ -558,7 +558,7 @@ function startTour() { ui.tour = 0; ui.tab = TOUR[0][0]; ui.poolListId = null; w
 
 function renderTabbar() {
   const tab = (id, label, icon) => `<button class="tab ${ui.tab === id ? 'active' : ''}" data-action="tab" data-tab="${id}">${icon}<span>${label}</span></button>`;
-  return `<nav class="tabbar ${ui.tour !== null ? 'touring' : ''}">${tab('today', 'Heute', ICON.sun)}${tab('habits', 'Habits', ICON.loop)}${tab('pool', 'Projekte', ICON.tray)}${tab('progress', 'Fortschritt', ICON.chart)}</nav>`;
+  return `<nav class="tabbar ${ui.tour !== null ? 'touring' : ''}">${tab('today', 'Heute', ICON.sun)}${tab('habits', 'Routinen', ICON.loop)}${tab('pool', 'Projekte', ICON.tray)}${tab('progress', 'Fortschritt', ICON.chart)}</nav>`;
 }
 
 function dayTitle(d, today) {
@@ -618,7 +618,7 @@ function renderToday() {
 
     <h3 class="section-title">Habits</h3>
     <div class="card">
-      ${habits.length ? habits.map((h) => habitRow(h, d, future)).join('') : (state.habits.length ? '<p class="empty">An diesem Tag stehen keine Habits an.</p>' : '<p class="empty">Noch keine Habits. <button class="link" data-action="tab" data-tab="habits">Im Reiter Habits anlegen</button></p>')}
+      ${habits.length ? habits.map((h) => habitRow(h, d, future)).join('') : (state.habits.length ? '<p class="empty">An diesem Tag stehen keine Habits an.</p>' : '<p class="empty">Noch keine Habits. <button class="link" data-action="tab" data-tab="habits">Im Reiter Routinen anlegen</button></p>')}
     </div>
 
     ${weekly.length ? `<h3 class="section-title">Diese Woche</h3>
@@ -712,16 +712,18 @@ function goalText(h) {
 
 function renderHabits() {
   const habits = [...state.habits].sort(byOrder);
+  const seg = ui.routines || 'habits';
   const head = `<header class="nav"><div class="nav-side"></div><div class="nav-side right"></div></header>
-    <h1 class="large-title">Habits</h1>`;
+    <h1 class="large-title">Routinen</h1>
+    <div class="segmented routine-switch">${[['habits', 'Habits'], ['checkin', 'Check-in']].map(([k, l]) => `<button class="${seg === k ? 'on' : ''}" data-action="routines" data-seg="${k}">${l}</button>`).join('')}</div>`;
+  if (seg === 'checkin') return `${head}${renderQuestionList()}`;
   if (!habits.length) {
     return `${head}<div class="card empty-state">
       <div class="big">${pic('🔁')}</div>
       <h2>Noch keine Habits</h2>
       <p>Such dir etwas aus dem Katalog aus oder leg ein eigenes Habit an. Abgehakt wird dann im Reiter Heute.</p>
       <button class="btn-primary" data-action="open-catalog">Habit hinzufügen</button>
-    </div>
-    ${renderQuestionList()}`;
+    </div>`;
   }
   return `${head}
     <div class="card">${habits.map((h, i) => `<div class="row">
@@ -735,8 +737,7 @@ function renderHabits() {
       </div>
     </div>`).join('')}</div>
     <p class="section-footer">Tippe auf ein Habit, um es zu bearbeiten. Mit den Pfeilen legst du die Reihenfolge auf Heute fest.</p>
-    <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="open-catalog"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Habit hinzufügen</span></button></div></div>
-    ${renderQuestionList()}`;
+    <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="open-catalog"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Habit hinzufügen</span></button></div></div>`;
 }
 
 function todoRow(t, today, future) {
@@ -1277,6 +1278,7 @@ const actions = {
   'surprise-take'() { todoById(ui.sheet.id).plannedDay = todayKey(); ui.sheet = null; persist(); toast('Steht jetzt auf Heute'); },
 
   'open-settings'() { openSheet({ type: 'settings' }); },
+  routines(el) { ui.routines = el.dataset.seg; render(); },
   'open-q-catalog'() { openSheet({ type: 'q-catalog' }); },
   'question-pick'(el) {
     const text = el.dataset.text;
@@ -1436,7 +1438,7 @@ function demoState(scene) {
 
 function applyDemoScene(scene) {
   const today = todayKey();
-  if (/checkin|progress|habits/.test(scene)) {
+  if (/checkin|progress|habits|routines/.test(scene)) {
     state.checkinQuestions = Q_CATALOG.slice(0, 4).map((q) => ({ id: uid(), ...q }));
     for (let o = 0; o < 20; o++) { const a = {}; state.checkinQuestions.forEach((q, i) => { if (o || i < 2) a[q.id] = 4 + ((o * 3 + i * 5) % 6); }); state.checkins[addDays(today, -o)] = a; }
   }
@@ -1459,6 +1461,7 @@ function applyDemoScene(scene) {
   if (scene === 'alldone') ui.lastAllDone[today] = false;
   if (scene === 'settings') { ui.tab = 'progress'; ui.sheet = { type: 'settings' }; }
   if (scene === 'qcatalog') { ui.tab = 'habits'; ui.sheet = { type: 'q-catalog' }; }
+  if (scene === 'routinescheckin') { ui.tab = 'habits'; ui.routines = 'checkin'; }
   if (scene === 'checkinhome') ui.tab = 'today';
   if (scene === 'checkin') ui.sheet = { type: 'checkin' };
 }
