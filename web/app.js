@@ -19,7 +19,12 @@ const weekday = (k) => parseDay(k).getDay(); // 0 = Sonntag
 const weekStart = (k) => addDays(k, -((weekday(k) + 6) % 7)); // Montag
 const fmt = (k, opts) => parseDay(k).toLocaleDateString('de-DE', opts);
 const num = (v) => Number(v).toLocaleString('de-DE', { maximumFractionDigits: 1 });
-const parseNum = (s) => { const v = parseFloat(String(s).replace(',', '.').trim()); return Number.isFinite(v) ? v : NaN; };
+const parseNum = (s) => {
+  let t = String(s).trim().replace(/\s/g, '');
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(t)) t = t.replace(/\./g, ''); // 10.000 = zehntausend
+  const v = parseFloat(t.replace(',', '.'));
+  return Number.isFinite(v) ? v : NaN;
+};
 const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0);
