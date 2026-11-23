@@ -657,7 +657,6 @@ function renderToday() {
       <div class="hero">
         <div class="daruma ${ui.wobble ? 'wobble' : ''}" data-action="poke" role="img" aria-label="${allDone ? 'Daruma mit beiden Augen' : 'Daruma mit einem Auge'}">${darumaSVG(allDone, popEye)}</div>
         <div class="hero-text">
-          ${d !== today && d !== addDays(today, -1) && d !== addDays(today, 1) ? '' : `<span class="hero-date">${esc(fmt(d, { weekday: 'long', day: 'numeric', month: 'long' }))}</span>`}
           <span class="hero-count">${done} von ${total} erledigt</span>
           <div class="bar"><span style="width:${total ? (done / total) * 100 : 0}%"></span></div>
           <span class="hero-msg">${msg}</span>
