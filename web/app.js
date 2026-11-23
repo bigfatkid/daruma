@@ -790,13 +790,15 @@ function habitRow(h, d, future) {
     </button>`;
   }
   const picked = h.kind === 'choice' ? picksOf(h, d) : [];
+  // Nach der Auswahl steht die gewählte Option statt des Habit-Namens da (Matti), bei mehreren „+N“
+  const shown = picked.length ? picked[0] + (picked.length > 1 ? ` +${picked.length - 1}` : '') : h.name;
   const sub = ([
-    h.kind === 'choice' ? (picked.length === 1 ? picked[0] : picked.length > 1 ? `${picked.length} gewählt` : h.multi && minPick(h) > 1 ? `mind. ${minPick(h)}` : '') : '',
+    h.kind === 'choice' && !picked.length && h.multi && minPick(h) > 1 ? `mind. ${minPick(h)}` : '',
     h.kind === 'count' ? (steps ? `${num(v)}/${num(h.target)} ${esc(h.unit)}` : `${num(h.target)} ${esc(h.unit)}`) : h.kind === 'limit' && (!steps || getValue(h, d) === undefined) ? `max. ${num(h.target)} ${esc(h.unit)}` : '',
   ].filter(Boolean).join(' · ') + (isWeekly(h) ? ` (${weekCount(h, d)}/${h.perWeek}${weekCount(h, d) >= h.perWeek ? ' ✓' : ''})` : '')).trim();
   const label = sub
-    ? `<span class="name-wrap"><span class="name">${esc(h.name)}</span><span class="tag">${sub}</span></span>`
-    : `<span class="name">${esc(h.name)}</span>`;
+    ? `<span class="name-wrap"><span class="name">${esc(shown)}</span><span class="tag">${sub}</span></span>`
+    : `<span class="name">${esc(shown)}</span>`;
   const stamp = done ? '<svg class="picto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>' : pic(h.icon);
   return `<div class="row hab-row ${steps ? '' : 'one-line'} ${done ? 'is-done' : ''} ${goalMet(h, d) ? 'goal-met' : ''}">
     ${(h.kind !== 'limit' || !steps) && !future
