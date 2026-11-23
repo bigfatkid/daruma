@@ -666,3 +666,5 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .pick-other .add-btn { margin-top: 10px; }
 .pick-stats { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: -2px; }
 .pick-stats b { font-weight: 600; color: var(--text); }
+.opt-input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; font-size: 17px; color: var(--text); padding: 0; outline: none; }
+.opt-input:focus { color: var(--accent); }

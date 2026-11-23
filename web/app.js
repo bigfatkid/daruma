@@ -536,9 +536,14 @@ const app = document.getElementById('app');
 
 function render() {
   if (!state.setupDone) { app.innerHTML = renderOnboarding(); return; }
+  // Scroll-Position im offenen Fenster behalten (sonst springt es bei jeder Änderung nach oben)
+  const oldBody = app.querySelector('.sheet-body');
+  const keepScroll = oldBody && ui.sheet && ui.sheet === render.lastSheet ? oldBody.scrollTop : 0;
+  render.lastSheet = ui.sheet;
   const screen = ui.tab === 'today' ? renderToday() : ui.tab === 'habits' ? renderHabits() : ui.tab === 'pool' ? renderPool() : renderProgress();
   app.innerHTML = `<main class="screen">${screen}</main>${renderTabbar()}${renderSheet()}${renderTour()}${ui.toast ? `<div class="toast${ui.undo ? ' with-undo' : ''}">${esc(ui.toast)}${ui.undo ? '<button class="toast-undo" data-action="undo">Rückgängig</button>' : ''}</div>` : ''}`;
   ui.wobble = false;
+  if (keepScroll) { const b = app.querySelector('.sheet-body'); if (b) b.scrollTop = keepScroll; }
   if (ui.focus) {
     const el = app.querySelector(ui.focus);
     ui.focus = null;
@@ -1009,7 +1014,7 @@ function renderSheet() {
       </div>
       ${dr.kind === 'choice' ? `<h3 class="section-title">Optionen</h3>
       <div class="card">
-        ${dr.options.map((o, i) => `<div class="row"><span class="row-main"><span class="name">${esc(o)}</span></span>
+        ${dr.options.map((o, i) => `<div class="row"><span class="row-main"><input class="opt-input" data-opt="${i}" value="${esc(o)}" autocomplete="off" aria-label="Option umbenennen"></span>
           <div class="controls"><button class="small-link" data-action="opt-del" data-i="${i}" aria-label="Entfernen">✕</button></div></div>`).join('')}
         <form class="row add-row" data-form="add-opt"><span class="plus">+</span><input id="opt-new" placeholder="z.B. Yoga, Laufen, Schwimmen" autocomplete="off" enterkeyhint="done">
           <button class="pill add-btn" type="submit">Hinzufügen</button></form>
@@ -1150,7 +1155,7 @@ function habitDraft(h, template) {
     freq: h && isWeekly(h) ? 'week' : h && h.weekdays.length < 7 ? 'days' : 'daily',
     perWeek: h && isWeekly(h) ? h.perWeek : 3,
     catchUp: h ? catchesUp(h) : false,
-    options: [...(src.options || [])], multi: !!src.multi, minPick: src.minPick || 1,
+    options: [...(src.options || [])], optOrig: [...(src.options || [])], multi: !!src.multi, minPick: src.minPick || 1,
   };
 }
 
@@ -1161,11 +1166,18 @@ function saveHabit() {
   const target = dr.kind === 'check' || dr.kind === 'choice' ? 1 : parseNum(dr.target);
   const step = dr.kind === 'count' ? parseNum(dr.step) : 1;
   if (!name) return fail('Bitte gib dem Habit einen Namen.');
-  if (dr.kind === 'choice' && !dr.options.length) return fail('Bitte lege mindestens eine Option an, z.B. Yoga.');
+  if (dr.kind === 'choice' && !dr.options.some((o) => o.trim())) return fail('Bitte lege mindestens eine Option an, z.B. Yoga.');
   if (dr.kind !== 'check' && !(target > 0)) return fail('Bitte gib einen Zielwert größer als 0 ein.');
   if (dr.kind === 'count' && !(step > 0)) return fail('Bitte gib eine Schrittweite größer als 0 ein.');
   if (dr.freq === 'days' && !dr.weekdays.length) return fail('Wähle mindestens einen Wochentag.');
   const values = { name, icon: dr.icon, kind: dr.kind, target, step, unit: (dr.unit || '').trim(), ...freqValues(dr), catchUp: dr.catchUp };
+  if (dr.kind === 'choice') {
+    // Umbenannte Optionen: auch im Verlauf umbenennen, damit „zuletzt“ und die Statistik stimmen
+    const ren = {};
+    dr.options.forEach((o, i) => { const old = dr.optOrig[i]; if (old && o.trim() && old !== o.trim()) ren[old] = o.trim(); });
+    if (dr.id && Object.keys(ren).length) for (const k of Object.keys(state.picks || {})) if (k.startsWith(dr.id + '|')) state.picks[k] = state.picks[k].map((n) => ren[n] || n);
+    dr.options = dr.options.map((o) => o.trim()).filter(Boolean);
+  }
   if (dr.kind === 'choice') Object.assign(values, { options: dr.options, multi: dr.multi, minPick: dr.multi ? Math.min(dr.minPick, dr.options.length) : 1, unit: '' });
   if (dr.id) Object.assign(habitById(dr.id), values);
   else state.habits.push({ ...makeHabit(values, nextOrder(state.habits)), ...values });
@@ -1196,7 +1208,7 @@ function addOption() {
   const input = document.getElementById('opt-new');
   const v = input ? input.value.trim() : '';
   if (!v) return false;
-  if (!ui.draft.options.some((o) => o.toLowerCase() === v.toLowerCase())) ui.draft.options.push(v);
+  if (!ui.draft.options.some((o) => o.toLowerCase() === v.toLowerCase())) { ui.draft.options.push(v); ui.draft.optOrig.push(null); }
   ui.draft.error = null;
   return true;
 }
@@ -1460,7 +1472,7 @@ const actions = {
     savePicks(other ? [...dr.sel, other] : dr.sel);
   },
   'pick-clear'() { savePicks([]); },
-  'opt-del'(el) { ui.draft.options.splice(Number(el.dataset.i), 1); ui.draft.minPick = Math.max(1, Math.min(ui.draft.minPick, ui.draft.options.length)); render(); },
+  'opt-del'(el) { ui.draft.options.splice(Number(el.dataset.i), 1); ui.draft.optOrig.splice(Number(el.dataset.i), 1); ui.draft.minPick = Math.max(1, Math.min(ui.draft.minPick, ui.draft.options.length)); render(); },
   'min-pick'(el) { const dr = ui.draft; dr.minPick = Math.max(1, Math.min(Math.max(1, dr.options.length), dr.minPick + Number(el.dataset.dir))); render(); },
   'draft-toggle'(el) { ui.draft[el.dataset.key] = !ui.draft[el.dataset.key]; render(); },
   'set-icon'(el) { ui.draft.icon = el.dataset.icon; render(); },
@@ -1679,6 +1691,7 @@ document.addEventListener('click', (ev) => {
 document.addEventListener('input', (ev) => {
   const el = ev.target;
   if (el.dataset && el.dataset.field && ui.draft) ui.draft[el.dataset.field] = el.value;
+  if (el.dataset && el.dataset.opt !== undefined && ui.draft && ui.draft.options) ui.draft.options[Number(el.dataset.opt)] = el.value;
   if (el.dataset && el.dataset.obTarget) ui.ob.cfg[el.dataset.obTarget].target = el.value;
   if (el.dataset && el.dataset.setting === 'name') { state.name = el.value.trim(); persist(); }
   if (el.dataset && (el.dataset.checkinNote || el.dataset.checkinRange)) {
