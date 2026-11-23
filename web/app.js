@@ -78,19 +78,22 @@ function makeHabit(t, order) {
 }
 
 /* ---------- Speicher ---------- */
-// Verpasstes: pro Habit (catchUp) und pro To-Do (rollover) einstellbar, Standard ist immer "nachholen".
-const catchesUp = (h) => h.catchUp !== false;
+// Verpasstes: pro Habit (catchUp, Standard aus) und pro To-Do (rollover, Standard an) einstellbar.
+const catchesUp = (h) => h.catchUp === true;
 const rollsOver = (t) => t.rollover !== false;
 // Neue Nutzer starten leer und werden durch die Einrichtung geführt.
 function freshState() {
-  return { version: 1, name: '', setupDone: false, habits: [], logs: {}, todos: [], lists: [] };
+  return { version: 1, name: '', setupDone: false, catchUpV2: true, habits: [], logs: {}, todos: [], lists: [] };
 }
 function normalize(s) {
+  // Einmalig: Standard für "Habits nachholen" ist jetzt aus. Kurz zuvor gesetzte Werte zurücksetzen.
+  if (!s.catchUpV2 && Array.isArray(s.habits)) s.habits.forEach((h) => { delete h.catchUp; });
   return {
     version: 1,
     name: typeof s.name === 'string' ? s.name : '',
     setupDone: s.setupDone !== false, // bestehende Daten (ohne Feld) gelten als eingerichtet
     tourDone: !!s.tourDone,
+    catchUpV2: true,
     habits: Array.isArray(s.habits) ? s.habits : [],
     logs: s.logs && typeof s.logs === 'object' ? s.logs : {},
     todos: Array.isArray(s.todos) ? s.todos : [],
@@ -332,7 +335,7 @@ function renderOnboarding() {
           ${t.kind !== 'check' && !f.noGoal ? `<label class="form-row ob-goal"><span>${t.kind === 'limit' ? 'Höchstens pro Tag' : f.freq === 'week' ? 'Ziel pro Mal' : 'Ziel pro Tag'}</span>
             <span class="tune-input"><input data-ob-target="${esc(t.name)}" inputmode="decimal" value="${esc(f.target)}"> ${esc(t.unit)}</span></label>` : ''}
           <div class="ob-freq">${freqPicker(f, attr)}</div>
-          ${toggleRow('Verpasst? Am nächsten Tag nachholbar', !f.noCatchUp, `data-action="ob-toggle" data-name="${esc(t.name)}" data-key="noCatchUp"`)}
+          ${toggleRow('Verpasst? Am nächsten Tag nachholbar', !!f.catchUp, `data-action="ob-toggle" data-name="${esc(t.name)}" data-key="catchUp"`)}
         </div>`;
       }).join('')}`;
     button = 'Weiter';
@@ -361,7 +364,7 @@ function finishOnboarding() {
     // Schrittweite passend zum eigenen Ziel, falls das Ziel kleiner als der Vorschlag-Schritt ist
     const step = t.kind === 'count' && t.step >= target ? Math.max(target / 4, 0.1) : t.step;
     const tpl = f.noGoal ? { ...t, kind: 'check', target: 1, step: 1, unit: '' } : { ...t, target, step };
-    state.habits.push({ ...makeHabit(tpl, nextOrder(state.habits)), ...freqValues(f), catchUp: !f.noCatchUp });
+    state.habits.push({ ...makeHabit(tpl, nextOrder(state.habits)), ...freqValues(f), catchUp: !!f.catchUp });
   });
   state.name = ob.name.trim();
   state.setupDone = true;
@@ -858,7 +861,7 @@ function habitDraft(h, template) {
     weekdays: h ? [...h.weekdays] : [0, 1, 2, 3, 4, 5, 6],
     freq: h && isWeekly(h) ? 'week' : h && h.weekdays.length < 7 ? 'days' : 'daily',
     perWeek: h && isWeekly(h) ? h.perWeek : 3,
-    catchUp: h ? catchesUp(h) : true,
+    catchUp: h ? catchesUp(h) : false,
   };
 }
 
