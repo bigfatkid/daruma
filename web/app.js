@@ -27,12 +27,11 @@ const byOrder = (a, b) => (a.order ?? 0) - (b.order ?? 0);
 /* ---------- Katalog ---------- */
 const CATALOG = [
   { name: 'Körper', items: [
-    { name: '3 L Wasser trinken', icon: '💧', kind: 'count', target: 3, step: 0.5, unit: 'L' },
+    { name: 'Wasser trinken', icon: '💧', kind: 'count', target: 3, step: 0.5, unit: 'L' },
     { name: '10 Minuten Dehnen', icon: '🤸', kind: 'check' },
-    { name: 'Hüftübungen', icon: '🦵', kind: 'check' },
-    { name: '8.000 Schritte', icon: '🚶', kind: 'check' },
+    { name: 'Schritte', icon: '🚶', kind: 'count', target: 10000, step: 1000, unit: 'Schritte' },
     { name: 'Sport', icon: '🏃', kind: 'check' },
-    { name: 'Obst oder Gemüse', icon: '🥕', kind: 'count', target: 5, step: 1, unit: 'Portionen' },
+    { name: 'Obst oder Gemüse', icon: '🥕', kind: 'count', target: 400, step: 100, unit: 'g' },
   ] },
   { name: 'Kopf', items: [
     { name: 'Meditieren', icon: '🧘', kind: 'check' },
@@ -53,7 +52,7 @@ const CATALOG = [
   ] },
 ];
 const findTemplate = (name) => CATALOG.flatMap((c) => c.items).find((t) => t.name === name);
-const STARTER = ['Meditieren', '3 L Wasser trinken', 'Bildschirmzeit'].map(findTemplate);
+const STARTER = ['Meditieren', 'Wasser trinken', 'Bildschirmzeit'].map(findTemplate);
 const LIST_SUGGESTIONS = [
   { name: 'Haushalt', icon: '🏠' }, { name: 'Projekte', icon: '🔨' }, { name: 'Ausflüge & Reisen', icon: '✈️' },
   { name: 'Bücher', icon: '📚' }, { name: 'Filme & Serien', icon: '🎬' }, { name: 'Rezepte zum Ausprobieren', icon: '🍳' },
@@ -183,7 +182,7 @@ const ui = {
   toast: null,
   wobble: false,
   lastAllDone: {},
-  ob: { step: 0, name: '', habits: [], lists: [] }, // Einrichtung
+  ob: { step: 0, name: '', habits: [], lists: [], targets: {} }, // Einrichtung
 };
 
 /* ---------- Kleine Bausteine ---------- */
@@ -280,12 +279,15 @@ function renderOnboarding() {
     button = 'Los geht’s';
   } else if (ob.step === 1) {
     body = `<h1 class="large-title">Deine Habits</h1>
-      <p class="ob-lead">Was willst du dir jeden Tag angewöhnen? Wähle ein paar aus. Lieber klein anfangen, ergänzen und ändern kannst du alles später im Reiter Habits.</p>
+      <p class="ob-lead">Was willst du dir jeden Tag angewöhnen? Wähle ein paar aus. Die Ziele sind nur Vorschläge, du kannst sie direkt anpassen. Ergänzen und ändern geht später im Reiter Habits.</p>
       ${CATALOG.map((c) => `<h3 class="section-title">${esc(c.name)}</h3><div class="card">${c.items.map((t) => {
         const on = ob.habits.includes(t.name);
         const goal = t.kind === 'count' ? `${num(t.target)} ${t.unit}` : t.kind === 'limit' ? `max. ${num(t.target)} ${t.unit}` : '';
+        const tune = on && t.kind !== 'check'
+          ? `<label class="form-row ob-tune"><span>${t.kind === 'count' ? 'Dein Ziel pro Tag' : 'Höchstens pro Tag'}</span>
+              <span class="tune-input"><input data-ob-target="${esc(t.name)}" inputmode="decimal" value="${esc(ob.targets[t.name] ?? num(t.target))}"> ${esc(t.unit)}</span></label>` : '';
         return `<div class="row"><button class="row-main" data-action="ob-habit" data-name="${esc(t.name)}">
-          <span class="emoji">${t.icon}</span><span class="name" style="flex:1">${esc(t.name)}</span>${goal ? `<span class="value">${esc(goal)}</span>` : ''}${pick(on)}</button></div>`;
+          <span class="emoji">${t.icon}</span><span class="name" style="flex:1">${esc(t.name)}</span>${goal && !on ? `<span class="value">${esc(goal)}</span>` : ''}${pick(on)}</button></div>${tune}`;
       }).join('')}</div>`).join('')}`;
     button = ob.habits.length ? `Weiter mit ${ob.habits.length} Habit${ob.habits.length === 1 ? '' : 's'}` : 'Ohne Habits weiter';
   } else if (ob.step === 2) {
@@ -317,7 +319,13 @@ function renderOnboarding() {
 function finishOnboarding() {
   const ob = ui.ob;
   const all = CATALOG.flatMap((c) => c.items).filter((t) => ob.habits.includes(t.name));
-  all.forEach((t) => state.habits.push(makeHabit(t, nextOrder(state.habits))));
+  all.forEach((t) => {
+    const v = parseNum(ob.targets[t.name] ?? t.target);
+    const target = t.kind !== 'check' && v > 0 ? v : t.target;
+    // Schrittweite passend zum eigenen Ziel, falls das Ziel kleiner als der Vorschlag-Schritt ist
+    const step = t.kind === 'count' && t.step >= target ? Math.max(target / 4, 0.1) : t.step;
+    state.habits.push(makeHabit({ ...t, target, step }, nextOrder(state.habits)));
+  });
   LIST_SUGGESTIONS.filter((l) => ob.lists.includes(l.name))
     .forEach((l) => state.lists.push({ id: uid(), name: l.name, icon: l.icon, order: nextOrder(state.lists) }));
   state.name = ob.name.trim();
@@ -967,6 +975,7 @@ document.addEventListener('click', (ev) => {
 document.addEventListener('input', (ev) => {
   const el = ev.target;
   if (el.dataset && el.dataset.field && ui.draft) ui.draft[el.dataset.field] = el.value;
+  if (el.dataset && el.dataset.obTarget) ui.ob.targets[el.dataset.obTarget] = el.value;
 });
 
 document.addEventListener('change', (ev) => {
