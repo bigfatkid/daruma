@@ -1,5 +1,11 @@
 # Daruma
 
+> **Hauptversion ist jetzt die Web-App im Ordner [`web/`](web/).** Sie läuft in Safari und liegt als Icon auf dem Home-Bildschirm, auch auf Firmenhandys, die eigene Apps blockieren. Netlify veröffentlicht sie automatisch bei jeder Änderung.
+>
+> **Web-App aufs iPhone:** Netlify-Adresse in Safari öffnen → Teilen-Symbol (Quadrat mit Pfeil) → *Zum Home-Bildschirm* → *Hinzufügen*. Daten bleiben nur auf dem iPhone. Unter *Fortschritt → Sicherung herunterladen* kannst du sie sichern.
+>
+> Die native iPhone-App (SwiftUI) unten bleibt als Option erhalten.
+
 Eine iPhone-App für tägliche Habits, To-Dos und einen Pool aus Langzeit-Aufgaben.
 Benannt nach der japanischen Daruma-Puppe: Ein Auge wird ausgemalt, wenn man sich ein Ziel setzt, das zweite, wenn man es erreicht hat.
 

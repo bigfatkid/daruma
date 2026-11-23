@@ -1,0 +1,15 @@
+# Netlify veröffentlicht den Ordner "web" (die Web-App). Kein Build-Schritt nötig.
+[build]
+  publish = "web"
+  command = ""
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"

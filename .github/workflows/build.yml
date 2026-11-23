@@ -3,7 +3,9 @@ name: Build
 # Prüft bei jeder Änderung, ob sich die App fehlerfrei bauen lässt.
 on:
   push:
+    paths: ['Daruma/**', 'Daruma.xcodeproj/**']
   pull_request:
+    paths: ['Daruma/**', 'Daruma.xcodeproj/**']
   workflow_dispatch:
 
 jobs:
