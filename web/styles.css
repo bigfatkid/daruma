@@ -668,3 +668,5 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .pick-stats b { font-weight: 600; color: var(--text); }
 .opt-input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; font-size: 17px; color: var(--text); padding: 0; outline: none; }
 .opt-input:focus { color: var(--accent); }
+.hab-row.goal-met .row-main, .hab-row.goal-met .controls { opacity: .55; }
+.hab-row.goal-met .row-main, .hab-row.goal-met .controls { opacity: .55; }

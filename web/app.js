@@ -200,12 +200,13 @@ function pickStats(h, days) {
   return Object.entries(count).sort((a, b) => b[1] - a[1]);
 }
 // x-mal pro Woche: steht jeden Tag bei den Habits, bis das Wochenziel erreicht ist
-function weeklyShows(h, d) {
-  if (!isWeekly(h) || h.createdAt > d) return false;
-  if (isDone(h, d)) return true;
+// Seit v58: bleibt auch nach erreichtem Ziel stehen (blass, am Ende), damit Extra-Einheiten gehen
+const weeklyShows = (h, d) => isWeekly(h) && h.createdAt <= d;
+function goalMet(h, d) {
+  if (!isWeekly(h) || isDone(h, d)) return false;
   let n = 0;
   for (let k = weekStart(d); k < d; k = addDays(k, 1)) if (k >= h.createdAt && isDone(h, k)) n++;
-  return n < h.perWeek;
+  return n >= h.perWeek;
 }
 function weekStreak(h) {
   const today = todayKey();
@@ -332,7 +333,8 @@ function habitsFolded(d, habits) {
   // Sind alle Habits des Tages abgehakt, klappt der Bereich von selbst zu.
   const o = (ui.habFold || {})[d];
   if (o !== undefined) return o;
-  return isFolded('habits') || (habits.length > 0 && habits.every((h) => isDone(h, d)));
+  const open = habits.filter((h) => !goalMet(h, d));
+  return isFolded('habits') || (open.length > 0 && open.every((h) => isDone(h, d)));
 }
 function isFolded(key) { return !!(state.collapsed || {})[key]; }
 function ciFolded(d) {
@@ -667,7 +669,7 @@ function renderToday() {
   const today = todayKey();
   const d = ui.day;
   const future = d > today;
-  const habits = state.habits.filter((h) => isActive(h, d) || weeklyShows(h, d)).sort(byOrder);
+  const habits = state.habits.filter((h) => isActive(h, d) || weeklyShows(h, d)).sort((a, b) => (goalMet(a, d) - goalMet(b, d)) || byOrder(a, b));
   const todos = state.todos
     .filter((t) => todoAppears(t, d, today))
     .sort((a, b) => (!!a.completedAt - !!b.completedAt) || byOrder(a, b));
@@ -713,7 +715,7 @@ function renderToday() {
 
     ${renderCheckinCard(d, today)}
 
-    ${sectionHead('habits', 'Habits', habitsFolded(d, habits), habits.length ? `${habits.filter((h) => isDone(h, d)).length} von ${habits.length} erledigt` : '')}
+    ${sectionHead('habits', 'Habits', habitsFolded(d, habits), counted.length ? `${counted.filter((h) => isDone(h, d)).length} von ${counted.length} erledigt` : '')}
     ${habitsFolded(d, habits) ? '' : `<div class="card">
       ${habits.length ? habits.map((h) => habitRow(h, d, future)).join('') : (state.habits.length ? '<p class="empty">An diesem Tag stehen keine Habits an.</p>' : '<p class="empty">Noch keine Habits. <button class="link" data-action="tab" data-tab="habits">Im Reiter Routinen anlegen</button></p>')}
     </div>`}
@@ -791,13 +793,13 @@ function habitRow(h, d, future) {
   const sub = [
     h.kind === 'choice' ? (picked.length ? picked.join(', ') : h.multi && minPick(h) > 1 ? `mind. ${minPick(h)}` : '') : '',
     h.kind === 'count' ? (steps ? `${num(v)}/${num(h.target)} ${esc(h.unit)}` : `${num(h.target)} ${esc(h.unit)}`) : h.kind === 'limit' && (!steps || getValue(h, d) === undefined) ? `max. ${num(h.target)} ${esc(h.unit)}` : '',
-    isWeekly(h) ? `${weekCount(h, d)}/${h.perWeek} diese Woche` : '',
+    isWeekly(h) ? `Woche: ${weekCount(h, d)}/${h.perWeek}${weekCount(h, d) >= h.perWeek ? ' ✓' : ''}` : '',
   ].filter(Boolean).join(' · ');
   const label = sub
     ? `<span class="name-wrap"><span class="name">${esc(h.name)}</span><span class="tag">${sub}</span></span>`
     : `<span class="name">${esc(h.name)}</span>`;
   const stamp = done ? '<svg class="picto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>' : pic(h.icon);
-  return `<div class="row hab-row ${steps ? '' : 'one-line'} ${done ? 'is-done' : ''}">
+  return `<div class="row hab-row ${steps ? '' : 'one-line'} ${done ? 'is-done' : ''} ${goalMet(h, d) ? 'goal-met' : ''}">
     ${(h.kind !== 'limit' || !steps) && !future
       ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : h.kind === 'choice' ? 'open-pick' : h.kind === 'limit' ? 'toggle-limit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${stamp}</span>${label}</button>`
       : `<div class="row-main"><span class="emoji">${stamp}</span>${label}</div>`}
