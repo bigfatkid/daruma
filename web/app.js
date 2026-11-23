@@ -1231,7 +1231,6 @@ function renderPickSheet() {
         <div class="pick-other-title">${multi ? 'Noch etwas anderes' : `Etwas anderes`}</div>
         <input class="field" id="pick-other" data-field="other" value="${esc(dr.other || '')}" placeholder="z.B. Klettern" autocomplete="off" enterkeyhint="done">
         <p class="pick-other-hint">Zählt ${dayWord} für ${esc(h.name)}. Taucht im Verlauf auf, kommt aber nicht dauerhaft in die Auswahl.</p>
-        <button class="pill add-btn" type="submit">${multi ? 'Hinzufügen' : 'Übernehmen'}</button>
       </form>`
     : `<div class="card"><div class="row"><button class="row-main" data-action="pick-other-open"><span class="name-wrap"><span class="name" style="color:var(--accent)">+ Andere …</span><span class="tag">einmalig eintragen</span></span></button></div></div>`;
   const wk = isWeekly(h) ? `<p class="section-footer">${esc(h.name)}: ${h.perWeek}× pro Woche · diese Woche ${weekCount(h, d)} von ${h.perWeek}</p>` : '';
