@@ -38,13 +38,11 @@ const CATALOG = [
     { name: 'Sport', icon: '🏃', kind: 'count', target: 30, step: 10, unit: 'min' },
     { name: 'Dehnen', icon: '🤸', kind: 'count', target: 10, step: 5, unit: 'min' },
     { name: 'Obst oder Gemüse', icon: '🥕', kind: 'count', target: 400, step: 100, unit: 'g' },
-    { name: 'Vor 23 Uhr ins Bett', icon: '🛏️', kind: 'check' },
-    { name: 'Kein Kaffee nach 14 Uhr', icon: '☕', kind: 'check' },
+    { name: 'Schlafen', icon: '🛏️', kind: 'count', target: 8, step: 0.5, unit: 'h' },
   ] },
   { name: 'Geist', items: [
     { name: 'Lesen', icon: '📖', kind: 'count', target: 10, step: 5, unit: 'Seiten' },
     { name: 'Etwas Neues lernen', icon: '🧠', kind: 'count', target: 15, step: 5, unit: 'min' },
-    { name: 'Morgens den Tag planen', icon: '🗒️', kind: 'check' },
     { name: 'Bildschirmzeit', icon: '⏳', kind: 'limit', target: 90, step: 1, unit: 'min' },
     { name: 'Kein Handy im Bett', icon: '📵', kind: 'check' },
     { name: 'Aufräumen', icon: '✨', kind: 'count', target: 5, step: 5, unit: 'min' },
@@ -80,19 +78,18 @@ function makeHabit(t, order) {
 }
 
 /* ---------- Speicher ---------- */
-// todoRollover: unerledigte To-Dos wandern auf heute (sonst verfallen sie an ihrem Tag)
-// habitCatchUp: offene Habits von gestern lassen sich heute noch nachholen
-const DEFAULT_SETTINGS = { todoRollover: true, habitCatchUp: false };
+// Verpasstes: pro Habit (catchUp) und pro To-Do (rollover) einstellbar, Standard ist immer "nachholen".
+const catchesUp = (h) => h.catchUp !== false;
+const rollsOver = (t) => t.rollover !== false;
 // Neue Nutzer starten leer und werden durch die Einrichtung geführt.
 function freshState() {
-  return { version: 1, name: '', setupDone: false, settings: { ...DEFAULT_SETTINGS }, habits: [], logs: {}, todos: [], lists: [] };
+  return { version: 1, name: '', setupDone: false, habits: [], logs: {}, todos: [], lists: [] };
 }
 function normalize(s) {
   return {
     version: 1,
     name: typeof s.name === 'string' ? s.name : '',
     setupDone: s.setupDone !== false, // bestehende Daten (ohne Feld) gelten als eingerichtet
-    settings: { ...DEFAULT_SETTINGS, ...(s.settings && typeof s.settings === 'object' ? s.settings : {}) },
     habits: Array.isArray(s.habits) ? s.habits : [],
     logs: s.logs && typeof s.logs === 'object' ? s.logs : {},
     todos: Array.isArray(s.todos) ? s.todos : [],
@@ -195,14 +192,14 @@ function rate(h, days) {
    Pool-Einträge (listId) erscheinen nur an dem Tag, für den sie geholt wurden, danach wieder im Pool. */
 function todoAppears(t, d, today) {
   if (t.completedAt) return t.completedAt === d;
-  if (!t.listId && !state.settings.todoRollover) return t.plannedDay === d; // verfällt an seinem Tag
+  if (!t.listId && !rollsOver(t)) return t.plannedDay === d; // verfällt an seinem Tag
   if (!t.plannedDay || d < today) return false;
   if (!t.listId && d === today) return t.plannedDay <= d;
   return t.plannedDay === d;
 }
 const inPool = (t, today) => !!t.listId && !t.completedAt && (!t.plannedDay || t.plannedDay < today);
 const subsText = (t) => (t.subs && t.subs.length ? `${t.subs.filter((x) => x.done).length}/${t.subs.length} Schritte` : '');
-const carriedOver = (t, today) => state.settings.todoRollover && !t.listId && !t.completedAt && t.plannedDay && t.plannedDay < today;
+const carriedOver = (t, today) => rollsOver(t) && !t.listId && !t.completedAt && t.plannedDay && t.plannedDay < today;
 const listById = (id) => state.lists.find((l) => l.id === id);
 const todoById = (id) => state.todos.find((t) => t.id === id);
 const habitById = (id) => state.habits.find((h) => h.id === id);
@@ -219,7 +216,7 @@ const ui = {
   toast: null,
   wobble: false,
   lastAllDone: {},
-  ob: { step: 0, name: '', habits: [], cfg: {}, settings: { ...DEFAULT_SETTINGS } }, // Einrichtung
+  ob: { step: 0, name: '', habits: [], cfg: {} }, // Einrichtung
 };
 
 /* ---------- Kleine Bausteine ---------- */
@@ -299,7 +296,7 @@ function render() {
 /* ---------- Einrichtung beim ersten Start ---------- */
 function renderOnboarding() {
   const ob = ui.ob;
-  const steps = 5;
+  const steps = 4;
   const dots = `<div class="ob-dots">${Array.from({ length: steps }, (_, i) => `<i class="${i === ob.step ? 'on' : ''}"></i>`).join('')}</div>`;
   const back = ob.step > 0 ? '<button class="link" data-action="ob-back">Zurück</button>' : '';
   const pick = (on) => statusCircle(on ? 'done' : 'open');
@@ -328,28 +325,27 @@ function renderOnboarding() {
       ${chosen.map((t) => {
         const f = ob.cfg[t.name], attr = `data-name="${esc(t.name)}"`;
         return `<div class="card ob-cfg">
-          <div class="ob-cfg-head"><span class="emoji">${t.icon}</span><strong>${esc(t.name)}</strong><span class="value">${t.kind === 'check' ? 'Ja/Nein' : ''}</span></div>
-          ${t.kind !== 'check' ? `<label class="form-row ob-goal"><span>${t.kind === 'limit' ? 'Höchstens pro Tag' : f.freq === 'week' ? 'Ziel pro Mal' : 'Ziel pro Tag'}</span>
+          <div class="ob-cfg-head"><span class="emoji">${t.icon}</span><strong>${esc(t.name)}</strong><span class="value">${t.kind === 'check' || f.noGoal ? 'Ja/Nein' : ''}</span></div>
+          ${t.kind !== 'check' ? toggleRow('Mit Ziel', !f.noGoal, `data-action="ob-toggle" data-name="${esc(t.name)}" data-key="noGoal"`) : ''}
+          ${t.kind !== 'check' && !f.noGoal ? `<label class="form-row ob-goal"><span>${t.kind === 'limit' ? 'Höchstens pro Tag' : f.freq === 'week' ? 'Ziel pro Mal' : 'Ziel pro Tag'}</span>
             <span class="tune-input"><input data-ob-target="${esc(t.name)}" inputmode="decimal" value="${esc(f.target)}"> ${esc(t.unit)}</span></label>` : ''}
           <div class="ob-freq">${freqPicker(f, attr)}</div>
+          ${toggleRow('Verpasst? Am nächsten Tag nachholbar', !f.noCatchUp, `data-action="ob-toggle" data-name="${esc(t.name)}" data-key="noCatchUp"`)}
         </div>`;
       }).join('')}`;
     button = 'Weiter';
-  } else if (ob.step === 3) {
-    body = `<h1 class="large-title">Wenn etwas offen bleibt</h1>
-      <p class="ob-lead">Was soll passieren, wenn du etwas an einem Tag nicht schaffst? Ändern kannst du das später unter Fortschritt.</p>
-      ${settingsCards(ob.settings, 'ob-setting')}`;
-    button = 'Weiter';
   } else {
-    body = `<div class="ob-hero"><div class="daruma big-daruma wobble" data-action="poke">${darumaSVG(true, true)}</div>
-      <h1>Alles bereit${ob.name ? `, ${esc(ob.name)}` : ''}!</h1></div>
-      <div class="card ob-tips">
-        <p><span class="emoji">☀️</span><span><strong>Heute</strong>: Habits abhaken und To-Dos erledigen. Mit + legst du ein To-Do an.</span></p>
-        <p><span class="emoji">🔁</span><span><strong>Habits</strong>: anlegen, bearbeiten, Reihenfolge ändern.</span></p>
-        <p><span class="emoji">🪣</span><span><strong>Pool</strong>: deine Langzeit-Aufgaben in eigenen Listen, mit Unteraufgaben. Bei Lust holst du dir etwas auf Heute.</span></p>
-        <p><span class="emoji">📱</span><span><strong>Tipp</strong>: In Safari über Teilen → „Zum Home-Bildschirm“ wird Daruma zur App.</span></p>
-        <p><span class="emoji">💾</span><span><strong>Wichtig</strong>: Deine Daten liegen nur auf diesem Gerät. Unter Fortschritt kannst du ab und zu eine Sicherung herunterladen.</span></p>
-      </div>`;
+    const standalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+    const tile = (icon, title, text) => `<div class="ob-tile">${icon}<strong>${title}</strong><span>${text}</span></div>`;
+    body = `<div class="ob-hero ob-done"><div class="daruma done-daruma wobble" data-action="poke">${darumaSVG(true, true)}</div>
+      <h1>Alles bereit${ob.name ? `, ${esc(ob.name)}` : ''}!</h1>
+      <p>Schaffst du an einem Tag alle Habits, bekommt Daruma ihr zweites Auge.</p></div>
+      <div class="ob-tiles">
+        ${tile(ICON.sun, 'Heute', 'Abhaken')}
+        ${tile(ICON.loop, 'Habits', 'Anpassen')}
+        ${tile(ICON.tray, 'Pool', 'Sammeln')}
+      </div>
+      <p class="ob-note">${standalone ? '' : 'Tipp: In Safari über Teilen → „Zum Home-Bildschirm“ wird Daruma zur App.<br>'}Deine Daten bleiben auf diesem Gerät. Eine Sicherung findest du unter Fortschritt.</p>`;
     button = 'Daruma starten';
   }
   return `<main class="screen ob">
@@ -368,25 +364,18 @@ function finishOnboarding() {
     const target = t.kind !== 'check' && v > 0 ? v : t.target;
     // Schrittweite passend zum eigenen Ziel, falls das Ziel kleiner als der Vorschlag-Schritt ist
     const step = t.kind === 'count' && t.step >= target ? Math.max(target / 4, 0.1) : t.step;
-    state.habits.push({ ...makeHabit({ ...t, target, step }, nextOrder(state.habits)), ...freqValues(f) });
+    const tpl = f.noGoal ? { ...t, kind: 'check', target: 1, step: 1, unit: '' } : { ...t, target, step };
+    state.habits.push({ ...makeHabit(tpl, nextOrder(state.habits)), ...freqValues(f), catchUp: !f.noCatchUp });
   });
   state.name = ob.name.trim();
-  state.settings = { ...ob.settings };
   state.setupDone = true;
   ui.tab = 'today'; ui.day = todayKey();
   window.scrollTo(0, 0);
   commit();
 }
 
-function settingsCards(v, action) {
-  const opt = (key, val, label, sub) => `<button class="menu-option" data-action="${action}" data-key="${key}" data-val="${val ? 1 : 0}">
-    <span class="big">${statusCircle(v[key] === val ? 'done' : 'open')}</span><span><strong>${label}</strong><span class="sub">${sub}</span></span></button>`;
-  return `<h3 class="section-title">To-Dos</h3>
-    <div class="card">${opt('todoRollover', true, 'Auf den nächsten Tag schieben', 'Bleibt sichtbar, bis du es erledigst')}
-      ${opt('todoRollover', false, 'Verfallen lassen', 'Bleibt an seinem Tag stehen und taucht nicht mehr auf')}</div>
-    <h3 class="section-title">Habits</h3>
-    <div class="card">${opt('habitCatchUp', true, 'Am nächsten Tag nachholbar', 'Was gestern offen blieb, kannst du heute noch abhaken')}
-      ${opt('habitCatchUp', false, 'Verfallen lassen', 'Jeder Tag zählt für sich')}</div>`;
+function toggleRow(label, on, attrs) {
+  return `<button class="form-row toggle-row" ${attrs} role="switch" aria-checked="${on}"><span>${label}</span><span class="switch ${on ? 'on' : ''}"><i></i></span></button>`;
 }
 
 function renderTabbar() {
@@ -417,8 +406,8 @@ function renderToday() {
 
   const weekly = state.habits.filter((h) => isWeekly(h) && h.createdAt <= addDays(weekStart(d), 6)).sort(byOrder);
   const yesterday = addDays(today, -1);
-  const catchUp = state.settings.habitCatchUp && d === today
-    ? state.habits.filter((h) => h.kind !== 'limit' && isActive(h, yesterday) && !isDone(h, yesterday)).sort(byOrder) : [];
+  const catchUp = d === today
+    ? state.habits.filter((h) => catchesUp(h) && h.kind !== 'limit' && isActive(h, yesterday) && !isDone(h, yesterday)).sort(byOrder) : [];
 
   const todos = state.todos
     .filter((t) => todoAppears(t, d, today))
@@ -460,7 +449,7 @@ function renderToday() {
     ${catchUp.length ? `<h3 class="section-title">Von gestern offen</h3>
     <div class="card">${catchUp.map((h) => `<div class="row"><div class="row-main"><span class="emoji">${h.icon}</span><span class="name">${esc(h.name)}</span></div>
       <div class="controls"><button class="pill" data-action="catch-up" data-id="${h.id}">Nachholen</button></div></div>`).join('')}</div>
-    <p class="section-footer">Zählt für gestern. Was du heute nicht nachholst, verfällt.</p>` : ''}
+    <p class="section-footer">Zählt für gestern. Was du heute nicht nachholst, verfällt. Pro Habit einstellbar.</p>` : ''}
 
     <h3 class="section-title">To-Dos</h3>
     <div class="card">
@@ -676,9 +665,6 @@ function renderProgress() {
     <div class="card">${rows || '<p class="empty">Noch keine Habits angelegt.</p>'}</div>
     <p class="section-footer">Serie = Tage am Stück. Die Kästchen zeigen die letzten 14 Tage. In den letzten 7 Tagen hast du ${doneTodos} ${doneTodos === 1 ? 'To-Do' : 'To-Dos'} erledigt.</p>
 
-    <div style="height:14px"></div>
-    ${settingsCards(state.settings, 'set-setting')}
-
     <h3 class="section-title">Deine Daten</h3>
     <div class="card">
       <div class="row"><button class="row-main" data-action="export"><span class="emoji">💾</span><span class="name">Sicherung herunterladen</span></button></div>
@@ -738,6 +724,8 @@ function renderSheet() {
       </div>` : ''}
       <h3 class="section-title">Wie oft?</h3>
       <div class="card">${freqPicker(dr, '')}</div>
+      <div class="card" style="margin-top:12px">${toggleRow('Verpasst? Am nächsten Tag nachholbar', dr.catchUp, 'data-action="draft-toggle" data-key="catchUp"')}</div>
+      <p class="section-footer">Dann steht es am nächsten Tag unter „Von gestern offen“.</p>
       <h3 class="section-title">Symbol</h3>
       <div class="card"><div class="icon-grid">${(HABIT_ICONS.includes(dr.icon) ? HABIT_ICONS : [dr.icon, ...HABIT_ICONS]).map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${i}</button>`).join('')}</div></div>
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
@@ -758,7 +746,8 @@ function renderSheet() {
         <div class="segmented" style="margin-bottom:10px">${[['today', 'Heute'], ['tomorrow', 'Morgen'], ['date', 'Datum']].map(([k, l]) => `<button class="${dr.when === k ? 'on' : ''}" data-action="set-when" data-when="${k}">${l}</button>`).join('')}</div>
         ${dr.when === 'date' ? `<label class="form-row"><span>Datum</span><input type="date" data-field="date" value="${esc(dr.date)}" min="${today}"></label>` : ''}
       </div>
-      <p class="section-footer">Nicht geschafft? Dann rutscht es automatisch auf den nächsten Tag.</p>`}
+      <div class="card" style="margin-top:12px">${toggleRow('Nicht geschafft? Auf den nächsten Tag schieben', dr.rollover, 'data-action="draft-toggle" data-key="rollover"')}</div>
+      <p class="section-footer">${dr.rollover ? 'Bleibt sichtbar, bis du es erledigst.' : 'Verfällt: bleibt an seinem Tag stehen.'}</p>`}
       <h3 class="section-title">Unteraufgaben</h3>
       <div class="card">
         ${dr.subs.map((x, i) => `<div class="row">
@@ -852,6 +841,7 @@ function habitDraft(h, template) {
     weekdays: h ? [...h.weekdays] : [0, 1, 2, 3, 4, 5, 6],
     freq: h && isWeekly(h) ? 'week' : h && h.weekdays.length < 7 ? 'days' : 'daily',
     perWeek: h && isWeekly(h) ? h.perWeek : 3,
+    catchUp: h ? catchesUp(h) : true,
   };
 }
 
@@ -864,7 +854,7 @@ function saveHabit() {
   if (dr.kind !== 'check' && !(target > 0)) return fail('Bitte gib einen Zielwert größer als 0 ein.');
   if (dr.kind === 'count' && !(step > 0)) return fail('Bitte gib eine Schrittweite größer als 0 ein.');
   if (dr.freq === 'days' && !dr.weekdays.length) return fail('Wähle mindestens einen Wochentag.');
-  const values = { name, icon: dr.icon, kind: dr.kind, target, step, unit: (dr.unit || '').trim(), ...freqValues(dr) };
+  const values = { name, icon: dr.icon, kind: dr.kind, target, step, unit: (dr.unit || '').trim(), ...freqValues(dr), catchUp: dr.catchUp };
   if (dr.id) Object.assign(habitById(dr.id), values);
   else state.habits.push({ ...makeHabit(values, nextOrder(state.habits)), ...values });
   ui.sheet = null; ui.draft = null;
@@ -892,11 +882,11 @@ function fail(message) { ui.draft.error = message; render(); }
 
 function todoDraft(t) {
   const today = todayKey();
-  if (!t) return { id: null, title: '', when: 'today', date: addDays(today, 2), isPool: false, subs: [] };
+  if (!t) return { id: null, title: '', when: 'today', date: addDays(today, 2), isPool: false, subs: [], rollover: true };
   let when = 'today';
   if (t.plannedDay === addDays(today, 1)) when = 'tomorrow';
   else if (t.plannedDay && t.plannedDay > addDays(today, 1)) when = 'date';
-  return { id: t.id, title: t.title, when, date: t.plannedDay && t.plannedDay > today ? t.plannedDay : addDays(today, 2), isPool: !!t.listId, subs: (t.subs || []).map((x) => ({ ...x })) };
+  return { id: t.id, title: t.title, when, date: t.plannedDay && t.plannedDay > today ? t.plannedDay : addDays(today, 2), isPool: !!t.listId, subs: (t.subs || []).map((x) => ({ ...x })), rollover: rollsOver(t) };
 }
 
 const cleanSubs = (subs) => (subs || []).filter((x) => x.title.trim()).map((x) => ({ id: x.id, title: x.title.trim(), done: !!x.done }));
@@ -926,9 +916,10 @@ function saveTodo() {
     const t = todoById(dr.id);
     t.title = title;
     t.subs = cleanSubs(dr.subs);
+    if (!t.listId) t.rollover = dr.rollover;
     if (!t.listId && !t.completedAt) t.plannedDay = plannedDay;
   } else {
-    state.todos.push({ id: uid(), title, plannedDay, completedAt: null, createdAt: today, listId: null, order: nextOrder(state.todos), subs: cleanSubs(dr.subs) });
+    state.todos.push({ id: uid(), title, plannedDay, completedAt: null, createdAt: today, listId: null, order: nextOrder(state.todos), subs: cleanSubs(dr.subs), rollover: dr.rollover });
   }
   ui.sheet = null; ui.draft = null;
   persist();
@@ -1055,19 +1046,19 @@ const actions = {
   'ob-next'() {
     const ob = ui.ob;
     if (ob.step === 0) { const f = document.getElementById('ob-name'); ob.name = f ? f.value.trim() : ''; }
-    if (ob.step >= 4) return finishOnboarding();
+    if (ob.step >= 3) return finishOnboarding();
     ob.step += ob.step === 1 && !ob.habits.length ? 2 : 1; // ohne Habits kein Feinschliff
     window.scrollTo(0, 0); render();
   },
   'ob-back'() { const ob = ui.ob; ob.step = Math.max(0, ob.step - (ob.step === 3 && !ob.habits.length ? 2 : 1)); window.scrollTo(0, 0); render(); },
+  'ob-toggle'(el) { const f = ui.ob.cfg[el.dataset.name]; f[el.dataset.key] = !f[el.dataset.key]; render(); },
   'ob-habit'(el) {
     const ob = ui.ob, n = el.dataset.name;
     ob.habits = ob.habits.includes(n) ? ob.habits.filter((x) => x !== n) : [...ob.habits, n];
     if (!ob.cfg[n]) { const t = findTemplate(n); ob.cfg[n] = { target: t.kind === 'check' ? '' : num(t.target), freq: 'daily', weekdays: [1, 2, 3, 4, 5], perWeek: 3 }; }
     render();
   },
-  'ob-setting'(el) { ui.ob.settings[el.dataset.key] = el.dataset.val === '1'; render(); },
-  'set-setting'(el) { state.settings[el.dataset.key] = el.dataset.val === '1'; commit(); },
+  'draft-toggle'(el) { ui.draft[el.dataset.key] = !ui.draft[el.dataset.key]; render(); },
   'set-icon'(el) { ui.draft.icon = el.dataset.icon; render(); },
   'save-habit'() { saveHabit(); },
   'delete-habit'() {
@@ -1161,7 +1152,7 @@ setInterval(checkNewDay, 60 * 1000);
 /* ---------- Demo-Daten (nur mit ?demo=...) ---------- */
 function demoState(scene) {
   const today = todayKey();
-  const s = { version: 1, name: 'Matti', setupDone: true, settings: { ...DEFAULT_SETTINGS, habitCatchUp: true }, habits: [], logs: {}, todos: [], lists: [] };
+  const s = { version: 1, name: 'Matti', setupDone: true, habits: [], logs: {}, todos: [], lists: [] };
   const tpls = [...STARTER, findTemplate('Dehnen'), findTemplate('Lesen')];
   tpls.forEach((t, i) => {
     const h = makeHabit(t, i);
