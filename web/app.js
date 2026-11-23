@@ -1011,34 +1011,98 @@ function renderPoolList(list, today) {
   `;
 }
 
+// Regal: ein Daruma pro Monat, füllt sich von unten mit Rot je nach Augen-Tagen
+function renderShelf(today) {
+  const starts = [state.firstUse, ...state.habits.map((h) => h.createdAt), ...Object.keys(state.logs).map((k) => k.split('|')[1])].filter(Boolean).sort();
+  const first = (starts[0] || today).slice(0, 7);
+  const months = [];
+  let m = today.slice(0, 7);
+  while (months.length < 5) {
+    months.unshift(m);
+    if (m <= first) break;
+    const [y, mo] = m.split('-').map(Number);
+    m = mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`;
+  }
+  let gid = 0;
+  const figure = (p) => {
+    const one = () => { gid++; return darumaSVG(true).replace(/id="dr"/, `id="sh${gid}"`).replace('url(#dr)', `url(#sh${gid})`); };
+    return `<span class="shelf-d"><span class="bg">${one()}</span><span class="fg" style="clip-path:inset(${Math.round((1 - p) * 100)}% 0 0 0)">${one()}</span></span>`;
+  };
+  const items = months.map((mk) => {
+    const [y, mo] = mk.split('-').map(Number);
+    const days = new Date(y, mo, 0).getDate();
+    let eyes = 0, counted = 0;
+    for (let n = 1; n <= days; n++) {
+      const k = `${mk}-${String(n).padStart(2, '0')}`;
+      if (k > today) break;
+      counted++;
+      if (dayProgress(k, today) >= 1) eyes++;
+    }
+    const total = mk === today.slice(0, 7) ? counted : days;
+    const name = new Date(y, mo - 1, 1).toLocaleDateString('de-DE', { month: 'short' }).replace('.', '');
+    return { fig: figure(total ? eyes / total : 0), label: `${name} ${eyes}`, now: mk === today.slice(0, 7) };
+  });
+  return `<div class="card shelf"><div class="shelf-row">${items.map((i) => i.fig).join('')}</div><div class="shelf-plank"></div>
+    <div class="shelf-labels">${items.map((i) => `<span class="${i.now ? 'now' : ''}">${esc(i.label)}</span>`).join('')}</div></div>`;
+}
+
+// Zusammenhänge: Check-in-Wert an Tagen mit Habit vs. ohne (erst ab genug Daten)
+function insights(today) {
+  const out = [];
+  const qs = state.checkinQuestions.filter((q) => q.type === 'scale');
+  for (const q of qs) {
+    const days = [];
+    for (let i = 0; i < 120; i++) { const d = addDays(today, -i), v = checkinFor(d)[q.id]; if (answered(v)) days.push([d, v]); }
+    if (days.length < 21) continue;
+    for (const h of state.habits) {
+      const yes = [], no = [];
+      days.forEach(([d, v]) => { if (d < h.createdAt) return; if (isDone(h, d)) yes.push(v); else if (isActive(h, d) || isWeekly(h)) no.push(v); });
+      if (yes.length < 5 || no.length < 5) continue;
+      const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+      const diff = avg(yes) - avg(no);
+      if (Math.abs(diff) >= 0.5) out.push({ h, q, diff });
+    }
+  }
+  return out.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)).slice(0, 3);
+}
+
 function renderProgress() {
   const today = todayKey();
   const habits = [...state.habits].sort(byOrder);
+  ui.openStats = ui.openStats || {};
   const rows = habits.map((h) => {
     const s = streak(h);
-    const w = rate(h, 7), m = rate(h, 30);
-    const dots = [];
-    for (let i = 13; i >= 0; i--) {
+    const boxes = [];
+    for (let i = 6; i >= 0; i--) {
       const d = addDays(today, -i);
       const cls = isDone(h, d) ? 'on' : isWeekly(h) || !isActive(h, d) ? 'off' : '';
-      dots.push(`<i class="${cls}" title="${esc(fmt(d, { weekday: 'short', day: 'numeric', month: 'short' }))}"></i>`);
+      boxes.push(`<i class="${cls}" title="${esc(fmt(d, { weekday: 'short', day: 'numeric', month: 'short' }))}"></i>`);
     }
-    return `<div class="stat">
-      <div class="stat-head"><span class="emoji">${pic(h.icon)}</span><span class="name">${esc(h.name)}</span><span class="streak">${s > 0 ? `🔥 ${s} ${isWeekly(h) ? (s === 1 ? 'Woche' : 'Wochen') : (s === 1 ? 'Tag' : 'Tage')}` : ''}</span></div>
-      <div class="stat-sub">Woche ${w === null ? '–' : w + ' %'} · 30 Tage ${m === null ? '–' : m + ' %'}</div>
-      ${h.kind === 'choice' && pickStats(h, 30).length ? `<div class="stat-sub pick-stats">${pickStats(h, 30).map(([n, c]) => `<span>${esc(n)} <b>${c}×</b></span>`).join('')}</div>` : ''}
-      <div class="dots">${dots.join('')}</div>
+    const opts = h.kind === 'choice' ? pickStats(h, 3650) : [];
+    const open = opts.length && ui.openStats[h.id];
+    const max = opts.length ? opts[0][1] : 1;
+    const nameHtml = `<span class="p-name">${esc(h.name)}</span>${opts.length ? `<svg class="p-chev ${open ? 'up' : ''}" viewBox="0 0 14 8"><path d="m1 1 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}`;
+    return `<div class="p-row">
+      ${opts.length ? `<button class="p-main" data-action="toggle-stats" data-id="${h.id}">` : '<div class="p-main">'}
+        <span class="emoji">${pic(h.icon)}</span><span class="p-title">${nameHtml}</span>
+        <span class="p-boxes">${boxes.join('')}</span><span class="p-streak">${s > 0 ? s : ''}</span>
+      ${opts.length ? '</button>' : '</div>'}
+      ${open ? `<div class="p-opts">${opts.map(([n, c]) => `<div class="p-opt"><span>${esc(n)}</span><span class="p-bar"><i style="width:${Math.round(c / max * 100)}%"></i></span><b>${c}×</b></div>`).join('')}</div>` : ''}
     </div>`;
   }).join('');
 
-  const doneTodos = state.todos.filter((t) => t.completedAt && t.completedAt > addDays(today, -7)).length;
+  const ins = insights(today);
+  const insHtml = ins.length ? `<h3 class="section-title">Zusammenhänge</h3><div class="card">${ins.map(({ h, q, diff }) => `<div class="p-row"><div class="p-main">
+      <span class="p-title"><span class="p-name">${esc(h.name)} <span class="p-arrow">→ ${esc(q.text)}</span></span></span>
+      <span class="p-diff">${diff > 0 ? '+' : '−'}${num(Math.round(Math.abs(diff) * 10) / 10)}</span></div></div>`).join('')}</div>` : '';
 
   return `
     <header class="nav"><div class="nav-side"></div><div class="nav-side right"><button class="icon-btn" data-action="open-settings" aria-label="Einstellungen">${ICON.gear}</button></div></header>
     <h1 class="large-title">Fortschritt</h1>
+    ${renderShelf(today)}
+    <h3 class="section-title">Habits</h3>
     <div class="card">${rows || '<p class="empty">Noch keine Habits angelegt.</p>'}</div>
-    <p class="section-footer">Serie = Tage am Stück. Die Kästchen zeigen die letzten 14 Tage. In den letzten 7 Tagen hast du ${doneTodos} ${doneTodos === 1 ? 'To-Do' : 'To-Dos'} erledigt.</p>
-
+    ${insHtml}
     ${renderCheckinStats(today)}
   `;
 }
@@ -1511,6 +1575,7 @@ const actions = {
   'tour-start'() { startTour(); },
   tab(el) { ui.tab = el.dataset.tab; if (ui.tab === 'pool') ui.poolListId = null; window.scrollTo(0, 0); render(); },
   'go-today'() { ui.day = todayKey(); render(); },
+  'toggle-stats'(el) { ui.openStats = ui.openStats || {}; ui.openStats[el.dataset.id] = !ui.openStats[el.dataset.id]; render(); },
   'open-month'() { ui.month = ui.day.slice(0, 7); openSheet({ type: 'month' }); },
   'month-shift'(el) {
     const [y, m] = ui.month.split('-').map(Number);
