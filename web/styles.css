@@ -682,3 +682,6 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .done-stamp .picto { width: 18px; height: 18px; }
 .stamp-chk { position: absolute; right: -3px; bottom: -3px; width: 17px; height: 17px; border-radius: 50%; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; border: 2px solid var(--card, #fffaf2); }
 .stamp-chk svg { width: 9px; height: 9px; }
+/* Fenster mit Eingabefeld: höher öffnen und über der Tastatur bleiben */
+.overlay { height: var(--vvh, 100%); top: var(--vvt, 0px); bottom: auto; }
+.sheet:has(input.field, textarea) { min-height: min(78%, 680px); }

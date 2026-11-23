@@ -1856,6 +1856,17 @@ function applyDemoScene(scene) {
   }
 }
 
+// iOS-Tastatur: Fenster an den sichtbaren Bereich anpassen, damit nichts hinter der Tastatur verschwindet
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  const fit = () => {
+    const kb = window.innerHeight - vv.height > 80;
+    document.documentElement.style.setProperty('--vvh', kb ? `${vv.height}px` : '100%');
+    document.documentElement.style.setProperty('--vvt', kb ? `${vv.offsetTop}px` : '0px');
+  };
+  vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit);
+}
+
 /* ---------- Start ---------- */
 if (DEMO) applyDemoScene(DEMO);
 else if (state.setupDone && !state.tourDone) ui.tour = 0;
