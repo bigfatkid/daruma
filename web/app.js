@@ -1249,7 +1249,20 @@ if (DEMO) applyDemoScene(DEMO);
 else if (state.setupDone && !state.tourDone) ui.tour = 0;
 render();
 
+// Updates zuverlässig ausliefern: beim Zurückkehren in die App nach einer neuen Version fragen
+// und, sobald sie aktiv ist, die Seite einmal neu laden (nicht mitten in einem offenen Fenster).
 if (!DEMO && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  const hadController = !!navigator.serviceWorker.controller;
+  let reg = null;
+  let pendingReload = false;
+  const tryReload = () => { if (pendingReload && !ui.sheet) { pendingReload = false; location.reload(); } };
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) { pendingReload = true; tryReload(); } });
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => { reg = r; }).catch(() => {}));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (reg) reg.update().catch(() => {});
+    tryReload();
+  });
+  document.addEventListener('click', () => setTimeout(tryReload, 0));
 }
 if (!DEMO && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
