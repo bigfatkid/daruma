@@ -79,6 +79,11 @@ final class Habit {
         weekdays.contains(Calendar.current.component(.weekday, from: day))
     }
 
+    /// Steht das Habit an diesem Tag an? (richtiger Wochentag und schon angelegt)
+    func isActive(on day: Date) -> Bool {
+        isScheduled(on: day) && Calendar.current.startOfDay(for: createdAt) <= Calendar.current.startOfDay(for: day)
+    }
+
     func isDone(on day: Date) -> Bool {
         switch kind {
         case .check:

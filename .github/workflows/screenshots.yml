@@ -41,7 +41,7 @@ jobs:
       - name: Screenshots machen
         run: |
           mkdir -p screens
-          for scene in today alldone catalog editor; do
+          for scene in today alldone yesterday editor catalog; do
             xcrun simctl terminate "$UDID" com.bigfatkid.daruma || true
             xcrun simctl launch "$UDID" com.bigfatkid.daruma \
               -demoScene "$scene" -AppleLanguages "(de)" -AppleLocale de_DE
