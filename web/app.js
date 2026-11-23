@@ -727,7 +727,7 @@ function habitRow(h, d, future) {
   const label = sub
     ? `<span class="name-wrap"><span class="name">${esc(h.name)}</span><span class="tag">${sub}</span></span>`
     : `<span class="name">${esc(h.name)}</span>`;
-  return `<div class="row hab-row ${done ? 'is-done' : ''}">
+  return `<div class="row hab-row ${steps ? '' : 'one-line'} ${done ? 'is-done' : ''}">
     ${(h.kind !== 'limit' || !steps) && !future
       ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : h.kind === 'limit' ? 'toggle-limit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${pic(h.icon)}</span>${label}</button>`
       : `<div class="row-main"><span class="emoji">${pic(h.icon)}</span>${label}</div>`}

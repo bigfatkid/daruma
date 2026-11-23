@@ -609,3 +609,8 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .ob-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .ob-chip.on .picto { color: #fff; }
 .ob-chip:active { transform: scale(.96); }
+/* Habit und Ziel in einer Zeile (Modus "ganz oder gar nicht", v44) */
+.hab-row.one-line { min-height: 54px; }
+.hab-row.one-line .row-main { flex: 1; }
+.hab-row.one-line .name-wrap { flex: 1; flex-direction: row; align-items: baseline; justify-content: space-between; gap: 8px; }
+.hab-row.one-line .name-wrap .tag { margin: 0; white-space: nowrap; flex: none; }
