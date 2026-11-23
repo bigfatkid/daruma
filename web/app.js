@@ -482,7 +482,7 @@ function renderMonthSheet() {
   for (let n = 1; n <= days; n++) {
     const k = `${m}-${String(n).padStart(2, '0')}`;
     const fut = k > today, p = fut ? 0 : dayProgress(k, today);
-    cells.push(`<button class="m-day ${k === ui.day ? 'selected' : ''} ${k === today ? 'today' : ''} ${fut ? 'future' : ''} ${p >= 1 ? 'full' : ''}" data-action="month-pick" data-day="${k}"><span>${n}</span>${fut ? '<i></i>' : weekRing(p, k === ui.day, false)}</button>`);
+    cells.push(`<button class="m-day ${k === ui.day ? 'selected' : ''} ${k === today ? 'today' : ''} ${fut ? 'future' : ''} ${p >= 1 ? 'full' : ''}" data-action="month-pick" data-day="${k}"><span>${n}</span>${fut ? '<i></i>' : p >= 1 ? darumaSVG(true) : weekRing(p, k === ui.day, false)}</button>`);
   }
   const title = new Date(y, mo - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
   const body = `<div class="m-nav"><button class="link" data-action="month-shift" data-n="-1" aria-label="Voriger Monat">${ICON.left}</button><strong>${esc(title)}</strong><button class="link" data-action="month-shift" data-n="1" aria-label="Nächster Monat">${ICON.right}</button></div>

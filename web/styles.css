@@ -645,6 +645,7 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .m-day svg { width: 14px; height: 14px; display: block; }
 .m-day i { width: 14px; height: 14px; display: block; }
 .m-day.full { background: var(--accent-soft); }
+.m-day svg.daruma-svg { width: 17px; height: 20px; margin: -3px 0 -3px; }
 .m-day.today span { color: var(--accent); }
 .m-day.selected { background: var(--accent); }
 .m-day.selected span { color: #fff; }
