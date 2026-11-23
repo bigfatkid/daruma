@@ -4,6 +4,9 @@ name: Screenshots
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   screenshots:
     runs-on: macos-15
@@ -50,3 +53,13 @@ jobs:
         with:
           name: screenshots
           path: screens
+
+      - name: Screenshots im Branch "screenshots" ablegen
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan screenshots
+          git rm -rf --quiet .
+          git add screens
+          git commit -m "Screenshots von ${GITHUB_SHA::7}"
+          git push -f origin screenshots
