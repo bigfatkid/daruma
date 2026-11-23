@@ -433,8 +433,7 @@ function renderMonthSheet() {
   }
   const title = new Date(y, mo - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
   const body = `<div class="m-nav"><button class="link" data-action="month-shift" data-n="-1" aria-label="Voriger Monat">${ICON.left}</button><strong>${esc(title)}</strong><button class="link" data-action="month-shift" data-n="1" aria-label="Nächster Monat">${ICON.right}</button></div>
-    <div class="card m-grid">${['M', 'D', 'M', 'D', 'F', 'S', 'S'].map((x) => `<em>${x}</em>`).join('')}${cells.join('')}</div>
-    <p class="section-footer">Rot hinterlegt: alles geschafft. Der Ring zeigt, wie viel erledigt war. Tippe auf einen Tag, um ihn zu öffnen.</p>`;
+    <div class="card m-grid">${['M', 'D', 'M', 'D', 'F', 'S', 'S'].map((x) => `<em>${x}</em>`).join('')}${cells.join('')}</div>`;
   return sheetShell('Kalender', '<button class="link" data-action="month-today">Heute</button>', '<button class="link" style="font-weight:600" data-action="close-sheet">Fertig</button>', body);
 }
 
