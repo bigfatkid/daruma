@@ -489,7 +489,7 @@ function renderOnboarding() {
           ${t.kind !== 'check' && !f.noGoal ? `<label class="form-row ob-goal"><span>${t.kind === 'limit' ? 'Höchstens pro Tag' : f.freq === 'week' ? 'Ziel pro Mal' : 'Ziel pro Tag'}</span>
             <span class="tune-input"><input data-ob-target="${esc(t.name)}" inputmode="decimal" value="${esc(f.target)}"> ${esc(t.unit)}</span></label>` : ''}
           <div class="ob-freq">${freqPicker(f, attr)}</div>
-          ${toggleRow('Verpasst? Am nächsten Tag nachholbar', !!f.catchUp, `data-action="ob-toggle" data-name="${esc(t.name)}" data-key="catchUp"`)}
+          ${toggleRow('Am Folgetag nachholbar', !!f.catchUp, `data-action="ob-toggle" data-name="${esc(t.name)}" data-key="catchUp"`)}
         </div>`;
       }).join('')}`;
     button = 'Weiter';
@@ -908,7 +908,7 @@ function renderSheet() {
       </div>` : ''}
       <h3 class="section-title">Wie oft?</h3>
       <div class="card">${freqPicker(dr, '')}</div>
-      <div class="card" style="margin-top:12px">${toggleRow('Verpasst? Am nächsten Tag nachholbar', dr.catchUp, 'data-action="draft-toggle" data-key="catchUp"')}</div>
+      <div class="card" style="margin-top:12px">${toggleRow('Am Folgetag nachholbar', dr.catchUp, 'data-action="draft-toggle" data-key="catchUp"')}</div>
       <p class="section-footer">Dann steht es am nächsten Tag unter „Von gestern offen“.</p>
       <h3 class="section-title">Symbol</h3>
       <div class="card"><div class="icon-grid">${(HABIT_ICONS.includes(dr.icon) ? HABIT_ICONS : [dr.icon, ...HABIT_ICONS]).map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${pic(i)}</button>`).join('')}</div></div>
@@ -1052,7 +1052,7 @@ function freqValues(f) {
   if (f.freq === 'days' && f.weekdays.length) return { weekdays: [...f.weekdays].sort(), perWeek: 0 };
   return { weekdays: [0, 1, 2, 3, 4, 5, 6], perWeek: 0 };
 }
-const FREQS = [['daily', 'Täglich'], ['days', 'Bestimmte Tage'], ['week', 'Pro Woche']];
+const FREQS = [['daily', 'Täglich'], ['days', 'An Tagen'], ['week', 'Pro Woche']];
 function freqPicker(f, attrs) {
   return `<div class="segmented">${FREQS.map(([k, l]) => `<button class="${f.freq === k ? 'on' : ''}" data-action="set-freq" data-freq="${k}" ${attrs}>${l}</button>`).join('')}</div>
     ${f.freq === 'days' ? `<div class="weekdays" style="margin-top:10px">${WEEKDAYS.map(([n, l]) => `<button class="${f.weekdays.includes(n) ? 'on' : ''}" data-action="toggle-weekday" data-n="${n}" ${attrs}>${l}</button>`).join('')}</div>` : ''}
