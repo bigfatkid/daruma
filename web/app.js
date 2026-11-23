@@ -115,15 +115,59 @@ function cleanHabit(h, i) {
     weekdays: Array.isArray(h.weekdays) && h.weekdays.length ? h.weekdays.filter((x) => Number.isInteger(x) && x >= 0 && x <= 6) : [0, 1, 2, 3, 4, 5, 6],
     createdAt: dayOk(h.createdAt) ? h.createdAt : todayKey(),
     perWeek: Number.isInteger(h.perWeek) && h.perWeek > 0 ? h.perWeek : 0,
+    times: Number.isInteger(h.times) && h.times > 1 ? h.times : 1, // Ja/Nein: wie oft am Tag (z.B. morgens + abends)
     order: typeof h.order === 'number' ? h.order : i,
     options: Array.isArray(h.options) ? h.options.filter((o) => typeof o === 'string' && o.trim()) : [],
     hist: Array.isArray(h.hist) ? h.hist.filter((e) => isObj(e) && dayOk(e.until)) : [],
   };
 }
+function cleanRepeat(r) {
+  if (!isObj(r) || !['day', 'week', 'month'].includes(r.every)) return null;
+  const wd = Array.isArray(r.wd) ? r.wd.filter((x) => Number.isInteger(x) && x >= 0 && x <= 6) : [];
+  if (r.every === 'week' && !wd.length) return null;
+  return { every: r.every, wd, md: Number.isInteger(r.md) && r.md >= 1 && r.md <= 31 ? r.md : 1 };
+}
+/* Wiederkehrende To-Dos: immer nur ein offenes Exemplar. Beim Abhaken entsteht das nächste. */
+// Nächster Termin nach dem Tag `after` (bei Woche auch `after` selbst, wenn `incl`)
+function nextRepeat(r, after, incl = false) {
+  if (r.every === 'day') return incl ? after : addDays(after, 1);
+  if (r.every === 'week') {
+    for (let i = incl ? 0 : 1; i <= 7; i++) { const d = addDays(after, i); if (r.wd.includes(parseDay(d).getDay())) return d; }
+    return addDays(after, 7);
+  }
+  const a = parseDay(after);
+  const at = (y, m) => { const last = new Date(y, m + 1, 0).getDate(); return dayKey(new Date(y, m, Math.min(r.md, last))); };
+  const same = at(a.getFullYear(), a.getMonth());
+  if (same > after || (incl && same === after)) return same;
+  return at(a.getFullYear(), a.getMonth() + 1);
+}
+function repeatText(r) {
+  if (!r) return '';
+  if (r.every === 'day') return 'täglich';
+  if (r.every === 'month') return `jeden Monat am ${r.md}.`;
+  if (r.wd.length === 7) return 'täglich';
+  if (r.wd.length === 1) return `jeden ${['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][r.wd[0]]}`;
+  return WEEKDAYS.filter(([n]) => r.wd.includes(n)).map(([, l]) => l).join(', ');
+}
+function spawnNext(t) {
+  if (!t.repeat || t.nextId) return;
+  const base = t.plannedDay && t.plannedDay > t.completedAt ? t.plannedDay : t.completedAt;
+  const n = { id: uid(), title: t.title, plannedDay: nextRepeat(t.repeat, base), completedAt: null, createdAt: todayKey(), listId: null,
+    order: t.order, subs: [], repeat: { ...t.repeat, wd: [...t.repeat.wd] }, nextId: null };
+  state.todos.push(n);
+  t.nextId = n.id;
+}
+function unspawnNext(t) {
+  const n = t.nextId ? todoById(t.nextId) : null;
+  if (n && !n.completedAt) state.todos = state.todos.filter((x) => x.id !== n.id);
+  t.nextId = null;
+}
+
 function cleanTodo(t, i) {
   if (!isObj(t) || typeof t.title !== 'string') return null;
   return { ...t, id: idOk(t.id) ? t.id : uid(), plannedDay: dayOk(t.plannedDay) ? t.plannedDay : null,
     completedAt: dayOk(t.completedAt) ? t.completedAt : null, listId: idOk(t.listId) ? t.listId : null,
+    repeat: cleanRepeat(t.repeat), nextId: idOk(t.nextId) ? t.nextId : null,
     order: typeof t.order === 'number' ? t.order : i, subs: Array.isArray(t.subs) ? t.subs.filter((x) => isObj(x) && typeof x.title === 'string').map((x) => ({ ...x, id: idOk(x.id) ? x.id : uid() })) : [] };
 }
 function normalize(s) {
@@ -208,7 +252,8 @@ function ruleAt(h, d) {
 const LIMIT_OVER = -1; // Limit überschritten (Modus „ganz oder gar nicht“)
 function isDone(h, d) {
   const v = getValue(h, d), r = ruleAt(h, d);
-  if (r.kind === 'check' || r.kind === 'choice') return (v ?? 0) >= 1; // Auswahl: abgehakt wie Ja/Nein
+  if (r.kind === 'check') return (v ?? 0) >= (r.times || 1);
+  if (r.kind === 'choice') return (v ?? 0) >= 1; // Auswahl: abgehakt wie Ja/Nein
   if (r.kind === 'count') return (v ?? 0) >= r.target;
   // Limit gilt als eingehalten, bis man „überschritten“ tippt (Review: Tag wird sonst nie fertig)
   if (v === undefined) return d <= todayKey();
@@ -847,7 +892,7 @@ function habitRow(h, d, future) {
   if (h.kind === 'choice') {
     controls = `<button class="status-btn" data-action="toggle-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Abhaken'}">${statusCircle(done ? 'done' : 'open')}</button>`;
   } else if (h.kind === 'check') {
-    controls = `<button class="status-btn" data-action="toggle-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Abhaken'}">${statusCircle(done ? 'done' : 'open')}</button>`;
+    controls = `<button class="status-btn" data-action="toggle-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Abhaken'}">${statusCircle(done ? 'done' : 'open', (v || 0) / (h.times || 1))}</button>`;
   } else if (h.kind === 'count') {
     // Einstellung: "whole" = ganz oder gar nicht (Standard), "steps" = Schritt für Schritt mit − / +
     controls = steps ? `<button class="step" data-action="step" data-id="${h.id}" data-dir="-1" ${v <= 0 || future ? 'disabled' : ''} aria-label="Weniger">−</button>
@@ -868,6 +913,7 @@ function habitRow(h, d, future) {
   // Nach der Auswahl steht die gewählte Option statt des Habit-Namens da (Matti), bei mehreren „+N“
   const shown = picked.length ? picked.join(', ') : h.name;
   const sub = ([
+    h.kind === 'check' && h.times > 1 ? `${Math.min(v || 0, h.times)}/${h.times}` : '',
     h.kind === 'choice' && !picked.length && h.multi && minPick(h) > 1 ? `mind. ${minPick(h)}` : '',
     h.kind === 'count' ? (steps ? `${num(v)}/${num(h.target)} ${esc(h.unit)}` : `${num(h.target)} ${esc(h.unit)}`) : h.kind === 'limit' && !done && !steps ? 'überschritten' : h.kind === 'limit' && (!steps || getValue(h, d) === undefined) ? `max. ${num(h.target)} ${esc(h.unit)}` : '',
   ].filter(Boolean).join(' · ') + (isWeekly(h) ? ` (${weekCount(h, d)}/${h.perWeek}${weekCount(h, d) >= h.perWeek ? ' ✓' : ''})` : '')).trim();
@@ -935,11 +981,11 @@ function renderHabits() {
 function todoRow(t, today, future) {
   const list = t.listId ? listById(t.listId) : null;
   const done = !!t.completedAt;
-  const tag = [list ? `aus ${list.name}` : '', subsText(t),
+  const tag = [list ? `aus ${list.name}` : '', subsText(t), repeatText(t.repeat),
     carriedOver(t, today) ? `seit ${t.plannedDay < addDays(today, -6) ? fmt(t.plannedDay, { day: 'numeric', month: 'long' }) : fmt(t.plannedDay, { weekday: 'long' })}` : ''].filter(Boolean).join(' · ');
   return swipeRow('todo', t.id, `
     <button class="row-main" data-action="edit-todo" data-id="${t.id}">
-      <span class="emoji">${pic(list ? list.icon : '📌')}</span>
+      <span class="emoji">${pic(list ? list.icon : t.repeat ? '🔁' : '📌')}</span>
       <span class="name-wrap"><span class="name ${done ? 'struck' : ''}">${esc(t.title)}</span>${tag && !done ? `<span class="tag">${esc(tag)}</span>` : ''}</span>
     </button>
     <div class="controls"><button class="status-btn" data-action="toggle-todo" data-id="${t.id}" ${future ? 'disabled' : ''} aria-label="${done ? 'Zurücksetzen' : 'Erledigt'}"><span class="todo-box ${done ? 'on' : ''}">${done ? '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>' : ''}</span></button></div>
@@ -1169,6 +1215,11 @@ function renderSheet() {
         <div class="segmented">${[['check', 'Ja/Nein'], ['count', 'Mit Ziel'], ['limit', 'Limit'], ['choice', 'Auswahl']].map(([k, l]) => `<button class="${dr.kind === k ? 'on' : ''}" data-action="set-kind" data-kind="${k}">${l}</button>`).join('')}</div>
         <div class="hint">${KIND_TEXT[dr.kind]}</div>
       </div>
+      ${dr.kind === 'check' ? `<h3 class="section-title">Wie oft am Tag?</h3>
+      <div class="card"><div class="form-row"><span>Mal pro Tag</span><span class="controls">
+        <button class="step" data-action="times" data-dir="-1" ${dr.times <= 1 ? 'disabled' : ''} aria-label="Weniger">−</button>
+        <span class="value" style="min-width:34px;text-align:center">${dr.times}</span>
+        <button class="step" data-action="times" data-dir="1" ${dr.times >= 9 ? 'disabled' : ''} aria-label="Mehr">+</button></span></div></div>` : ''}
       ${dr.kind === 'choice' ? `<h3 class="section-title">Optionen</h3>
       <div class="card">
         ${dr.options.map((o, i) => `<div class="row"><span class="row-main"><input class="opt-input" data-opt="${i}" value="${esc(o)}" autocomplete="off" aria-label="Option umbenennen"></span>
@@ -1213,6 +1264,11 @@ function renderSheet() {
         ${dr.when === 'date' ? `<label class="form-row"><span>Datum</span><input type="date" data-field="date" value="${esc(dr.date)}" min="${today}"></label>` : ''}
       </div>
       
+      ${dr.isPool ? '' : `<h3 class="section-title">Wiederholen</h3>
+      <div class="card">
+        <div class="segmented" style="${dr.repeat === 'week' ? 'margin-bottom:10px' : ''}">${[['none', 'Nie'], ['day', 'Täglich'], ['week', 'Wöchentlich'], ['month', 'Monatlich']].map(([k, l]) => `<button class="${dr.repeat === k ? 'on' : ''}" data-action="set-repeat" data-repeat="${k}">${l}</button>`).join('')}</div>
+        ${dr.repeat === 'week' ? `<div class="segmented wd-pick">${WEEKDAYS.map(([n, l]) => `<button class="${dr.wd.includes(n) ? 'on' : ''}" data-action="repeat-wd" data-wd="${n}">${l}</button>`).join('')}</div>` : ''}
+      </div>`}
       ${!dr.isPool ? '' : `<h3 class="section-title">Unteraufgaben</h3>
       <div class="card">
         ${dr.subs.map((x, i) => `<div class="row">
@@ -1349,6 +1405,7 @@ function habitDraft(h, template) {
     freq: h && isWeekly(h) ? 'week' : h && h.weekdays.length < 7 ? 'days' : 'daily',
     perWeek: h && isWeekly(h) ? h.perWeek : 3,
     catchUp: h ? catchesUp(h) : false,
+    times: src.kind === 'check' && src.times > 1 ? src.times : 1,
     options: [...(src.options || [])], optOrig: [...(src.options || [])], multi: !!src.multi, minPick: src.minPick || 1,
   };
 }
@@ -1364,7 +1421,7 @@ function saveHabit() {
   if (dr.kind !== 'check' && !(target > 0)) return fail('Bitte gib einen Zielwert größer als 0 ein.');
   if (dr.kind === 'count' && !(step > 0)) return fail('Bitte gib eine Schrittweite größer als 0 ein.');
   if (dr.freq === 'days' && !dr.weekdays.length) return fail('Wähle mindestens einen Wochentag.');
-  const values = { name, icon: dr.icon, kind: dr.kind, target, step, unit: (dr.unit || '').trim(), ...freqValues(dr), catchUp: dr.catchUp };
+  const values = { name, icon: dr.icon, kind: dr.kind, target, step, unit: (dr.unit || '').trim(), ...freqValues(dr), catchUp: dr.catchUp, times: dr.kind === 'check' ? dr.times || 1 : 1 };
   if (dr.kind === 'choice') {
     // Umbenannte Optionen: auch im Verlauf umbenennen, damit „zuletzt“ und die Statistik stimmen
     const ren = {};
@@ -1381,8 +1438,8 @@ function saveHabit() {
   if (dr.id) {
     const h = habitById(dr.id);
     // Regeländerung merken, damit vergangene Tage ihren Status behalten
-    if ((h.kind !== values.kind || h.target !== values.target) && h.createdAt < todayKey()) {
-      h.hist = [...(h.hist || []), { until: todayKey(), kind: h.kind, target: h.target }];
+    if ((h.kind !== values.kind || h.target !== values.target || (h.times || 1) !== values.times) && h.createdAt < todayKey()) {
+      h.hist = [...(h.hist || []), { until: todayKey(), kind: h.kind, target: h.target, times: h.times || 1 }];
     }
     Object.assign(h, values);
   }
@@ -1462,12 +1519,13 @@ function savePicks(names) {
 
 function todoDraft(t) {
   const today = todayKey();
-  if (!t) return { id: null, title: '', when: 'today', date: addDays(today, 2), isPool: false, subs: [], rollover: true };
+  if (!t) return { id: null, title: '', when: 'today', date: addDays(today, 2), isPool: false, subs: [], rollover: true, repeat: 'none', wd: [] };
   let when = t.listId && !t.plannedDay ? 'none' : 'today';
   if (t.plannedDay === addDays(today, 1)) when = 'tomorrow';
   else if (t.plannedDay && t.plannedDay > addDays(today, 1)) when = 'date';
   const date = t.plannedDay && t.plannedDay > today ? t.plannedDay : addDays(today, 2);
-  return { id: t.id, title: t.title, when, date, whenOrig: when, dateOrig: date, isPool: !!t.listId, subs: (t.subs || []).map((x) => ({ ...x })), rollover: rollsOver(t) };
+  const repeat = t.repeat ? t.repeat.every : 'none', wd = t.repeat ? [...t.repeat.wd] : [];
+  return { id: t.id, title: t.title, when, date, whenOrig: when, dateOrig: date, isPool: !!t.listId, repeat, wd, repeatOrig: JSON.stringify([repeat, wd]), subs: (t.subs || []).map((x) => ({ ...x })), rollover: rollsOver(t) };
 }
 
 const cleanSubs = (subs) => (subs || []).filter((x) => x.title.trim()).map((x) => ({ id: x.id, title: x.title.trim(), done: !!x.done }));
@@ -1492,16 +1550,27 @@ function saveTodo() {
   const title = (dr.title || '').trim();
   if (!title) return fail('Bitte schreib kurz, was zu tun ist.');
   const today = todayKey();
-  const plannedDay = dr.when === 'tomorrow' ? addDays(today, 1) : dr.when === 'date' ? (dr.date || today) : today;
+  let plannedDay = dr.when === 'tomorrow' ? addDays(today, 1) : dr.when === 'date' ? (dr.date || today) : today;
+  if (dr.repeat === 'week' && !dr.wd.length) return fail('Wähle mindestens einen Wochentag.');
+  const repeat = dr.isPool || dr.repeat === 'none' ? null : { every: dr.repeat, wd: dr.repeat === 'week' ? [...dr.wd] : [], md: parseDay(plannedDay).getDate() };
+  const repeatChanged = JSON.stringify([dr.repeat, dr.wd]) !== dr.repeatOrig;
+  // Wöchentlich: erster Termin ist der nächste gewählte Wochentag ab „Wann“
+  if (repeat && repeat.every === 'week') plannedDay = nextRepeat(repeat, plannedDay, true);
   if (dr.id) {
     const t = todoById(dr.id);
     t.title = title;
     t.subs = cleanSubs(dr.subs);
     // Tag nur ändern, wenn „Wann?“ wirklich geändert wurde (sonst ginge „seit …“ verloren)
     const whenChanged = dr.when !== dr.whenOrig || (dr.when === 'date' && dr.date !== dr.dateOrig);
-    if (!t.completedAt && whenChanged) t.plannedDay = dr.when === 'none' ? null : plannedDay;
+    if (!t.completedAt && (whenChanged || (repeatChanged && repeat))) t.plannedDay = dr.when === 'none' ? null : plannedDay;
+    if (repeatChanged) {
+      if (repeat && t.repeat && t.repeat.every === 'month' && repeat.every === 'month' && !whenChanged) repeat.md = t.repeat.md;
+      t.repeat = repeat;
+      if (!repeat && t.completedAt) unspawnNext(t);
+      if (repeat && t.completedAt) spawnNext(t);
+    }
   } else {
-    state.todos.push({ id: uid(), title, plannedDay, completedAt: null, createdAt: today, listId: null, order: nextOrder(state.todos), subs: cleanSubs(dr.subs) });
+    state.todos.push({ id: uid(), title, plannedDay, completedAt: null, createdAt: today, listId: null, order: nextOrder(state.todos), subs: cleanSubs(dr.subs), repeat, nextId: null });
   }
   ui.sheet = null; ui.draft = null;
   persist();
@@ -1635,7 +1704,13 @@ const actions = {
     persist();
     toast(h.kind === 'limit' ? `„${h.name}“ überschritten` : `„${h.name}“ wieder offen`, () => { if (prev === undefined) delete state.logs[k]; else state.logs[k] = prev; });
   },
-  'toggle-habit'(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, isDone(h, ui.day) ? 0 : 1); commit(); },
+  'toggle-habit'(el) {
+    const h = habitById(el.dataset.id);
+    // Ja/Nein mit „Mal pro Tag“: jeder Tipp füllt ein Stück, voll → wieder leer
+    const many = h.kind === 'check' && h.times > 1;
+    setValue(h, ui.day, isDone(h, ui.day) ? 0 : many ? (valueOf(h, ui.day) || 0) + 1 : 1);
+    commit();
+  },
   'catch-up'(el) { const h = habitById(el.dataset.id); setValue(h, addDays(todayKey(), -1), h.kind === 'check' ? 1 : h.target); persist(); toast(`„${h.name}“ für gestern nachgeholt`); },
   'fill-habit'(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, isDone(h, ui.day) ? 0 : h.target); commit(); },
   step(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, Math.max(0, valueOf(h, ui.day) + Number(el.dataset.dir) * h.step)); commit(); },
@@ -1651,6 +1726,7 @@ const actions = {
   'toggle-todo'(el) {
     const t = todoById(el.dataset.id);
     t.completedAt = t.completedAt ? null : ui.day;
+    if (t.completedAt) spawnNext(t); else unspawnNext(t);
     if (!t.completedAt && t.listId && (!t.plannedDay || t.plannedDay < todayKey())) t.plannedDay = todayKey();
     commit();
   },
@@ -1663,6 +1739,16 @@ const actions = {
   'sub-toggle'(el) { const x = ui.draft.subs[Number(el.dataset.i)]; x.done = !x.done; syncSubs(); },
   'sub-del'(el) { ui.draft.subs.splice(Number(el.dataset.i), 1); syncSubs(); },
   'set-when'(el) { ui.draft.when = el.dataset.when; render(); },
+  'set-repeat'(el) {
+    const dr = ui.draft; dr.repeat = el.dataset.repeat;
+    if (dr.repeat === 'week' && !dr.wd.length) {
+      const today = todayKey();
+      const base = dr.when === 'tomorrow' ? addDays(today, 1) : dr.when === 'date' ? (dr.date || today) : today;
+      dr.wd = [parseDay(base).getDay()];
+    }
+    render();
+  },
+  'repeat-wd'(el) { const dr = ui.draft, n = Number(el.dataset.wd); dr.wd = dr.wd.includes(n) ? dr.wd.filter((x) => x !== n) : [...dr.wd, n]; render(); },
   'save-todo'() { saveTodo(); },
   'delete-todo'() {
     if (!ui.draft.confirmDelete) { ui.draft.confirmDelete = true; return render(); }
@@ -1731,6 +1817,7 @@ const actions = {
   },
   'pick-clear'() { savePicks([]); },
   'opt-del'(el) { ui.draft.options.splice(Number(el.dataset.i), 1); ui.draft.optOrig.splice(Number(el.dataset.i), 1); ui.draft.minPick = Math.max(1, Math.min(ui.draft.minPick, ui.draft.options.length)); render(); },
+  times(el) { const dr = ui.draft; dr.times = Math.max(1, Math.min(9, (dr.times || 1) + Number(el.dataset.dir))); render(); },
   'min-pick'(el) { const dr = ui.draft; dr.minPick = Math.max(1, Math.min(Math.max(1, dr.options.length), dr.minPick + Number(el.dataset.dir))); render(); },
   'draft-toggle'(el) { ui.draft[el.dataset.key] = !ui.draft[el.dataset.key]; render(); },
   'set-icon'(el) { ui.draft.icon = el.dataset.icon; render(); },

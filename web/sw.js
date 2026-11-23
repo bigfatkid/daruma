@@ -1,6 +1,6 @@
 // Service Worker: macht Daruma offline-fähig.
 // Strategie: erst Netzwerk (damit Updates sofort ankommen), ohne Netz aus dem Zwischenspeicher.
-const CACHE = 'daruma-v74';
+const CACHE = 'daruma-v75';
 const ASSETS = [
   './',
   './index.html',
