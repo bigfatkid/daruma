@@ -78,9 +78,9 @@ function makeHabit(t, order) {
 }
 
 /* ---------- Speicher ---------- */
-// Verpasstes: pro Habit (catchUp, Standard aus) und pro To-Do (rollover, Standard an) einstellbar.
+// Verpasstes: pro Habit einstellbar (catchUp, Standard aus). To-Dos rutschen immer auf den nächsten Tag.
 const catchesUp = (h) => h.catchUp === true;
-const rollsOver = (t) => t.rollover !== false;
+const rollsOver = () => true;
 // Neue Nutzer starten leer und werden durch die Einrichtung geführt.
 function freshState() {
   return { version: 1, name: '', setupDone: false, catchUpV2: true, habits: [], logs: {}, todos: [], lists: [] };
@@ -770,9 +770,8 @@ function renderSheet() {
         <div class="segmented" style="margin-bottom:10px">${[['today', 'Heute'], ['tomorrow', 'Morgen'], ['date', 'Datum']].map(([k, l]) => `<button class="${dr.when === k ? 'on' : ''}" data-action="set-when" data-when="${k}">${l}</button>`).join('')}</div>
         ${dr.when === 'date' ? `<label class="form-row"><span>Datum</span><input type="date" data-field="date" value="${esc(dr.date)}" min="${today}"></label>` : ''}
       </div>
-      <div class="card" style="margin-top:12px">${toggleRow('Nicht geschafft? Auf den nächsten Tag schieben', dr.rollover, 'data-action="draft-toggle" data-key="rollover"')}</div>
-      <p class="section-footer">${dr.rollover ? 'Bleibt sichtbar, bis du es erledigst.' : 'Verfällt: bleibt an seinem Tag stehen.'}</p>`}
-      <h3 class="section-title">Unteraufgaben</h3>
+      <p class="section-footer">Nicht geschafft? Dann rutscht es automatisch auf den nächsten Tag.</p>`}
+      ${!dr.isPool ? '' : `<h3 class="section-title">Unteraufgaben</h3>
       <div class="card">
         ${dr.subs.map((x, i) => `<div class="row">
           <button class="status-btn" data-action="sub-toggle" data-i="${i}" aria-label="${x.done ? 'Zurücksetzen' : 'Erledigt'}">${statusCircle(x.done ? 'done' : 'open')}</button>
@@ -782,7 +781,7 @@ function renderSheet() {
         <form class="row add-row" data-form="add-sub"><span class="plus">+</span><input id="sub-new" placeholder="Unteraufgabe eintippen" autocomplete="off" enterkeyhint="done">
           <button class="pill add-btn" type="submit">Hinzufügen</button></form>
       </div>
-      <p class="section-footer">Große Aufgaben in kleine Schritte teilen, z.B. „Flüge vergleichen“, „Hotel buchen“.</p>
+      <p class="section-footer">Große Aufgaben in kleine Schritte teilen, z.B. „Flüge vergleichen“, „Hotel buchen“.</p>`}
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
       ${isNew ? '' : `<div class="card" style="margin-top:28px">
         ${t && t.listId && !t.completedAt && t.plannedDay && t.plannedDay >= today ? '<button class="btn-plain" style="color:var(--accent)" data-action="back-to-pool">Zurück ins Projekt</button>' : ''}
@@ -941,10 +940,9 @@ function saveTodo() {
     const t = todoById(dr.id);
     t.title = title;
     t.subs = cleanSubs(dr.subs);
-    if (!t.listId) t.rollover = dr.rollover;
     if (!t.listId && !t.completedAt) t.plannedDay = plannedDay;
   } else {
-    state.todos.push({ id: uid(), title, plannedDay, completedAt: null, createdAt: today, listId: null, order: nextOrder(state.todos), subs: cleanSubs(dr.subs), rollover: dr.rollover });
+    state.todos.push({ id: uid(), title, plannedDay, completedAt: null, createdAt: today, listId: null, order: nextOrder(state.todos), subs: cleanSubs(dr.subs) });
   }
   ui.sheet = null; ui.draft = null;
   persist();
