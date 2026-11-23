@@ -601,8 +601,12 @@ function renderToday() {
   const d = ui.day;
   const future = d > today;
   const habits = state.habits.filter((h) => isActive(h, d)).sort(byOrder);
-  const done = habits.filter((h) => isDone(h, d)).length;
-  const total = habits.length;
+  const todos = state.todos
+    .filter((t) => todoAppears(t, d, today))
+    .sort((a, b) => (!!a.completedAt - !!b.completedAt) || byOrder(a, b));
+  // Für das zweite Auge zählen Habits und To-Dos des Tages (Mattis Wunsch)
+  const done = habits.filter((h) => isDone(h, d)).length + todos.filter((t) => t.completedAt).length;
+  const total = habits.length + todos.length;
   const allDone = total > 0 && done === total;
 
   // Wackeln, wenn gerade alles erledigt wurde
@@ -614,10 +618,6 @@ function renderToday() {
   const yesterday = addDays(today, -1);
   const catchUp = d === today
     ? state.habits.filter((h) => catchesUp(h) && h.kind !== 'limit' && isActive(h, yesterday) && !isDone(h, yesterday)).sort(byOrder) : [];
-
-  const todos = state.todos
-    .filter((t) => todoAppears(t, d, today))
-    .sort((a, b) => (!!a.completedAt - !!b.completedAt) || byOrder(a, b));
 
   const msg = future ? 'Dieser Tag kommt noch. Abhaken kannst du, wenn er da ist.'
     : allDone ? `Daruma hat beide Augen. Stark${state.name ? `, ${esc(state.name)}` : ''}!`
@@ -678,8 +678,10 @@ function renderWeek(today) {
   for (let i = 0; i < 7; i++) {
     const k = addDays(start, i);
     const active = state.habits.filter((h) => isActive(h, k));
-    const done = active.filter((h) => isDone(h, k)).length;
-    const progress = active.length ? done / active.length : 0;
+    const dayTodos = state.todos.filter((t) => todoAppears(t, k, today));
+    const n = active.length + dayTodos.length;
+    const done = active.filter((h) => isDone(h, k)).length + dayTodos.filter((t) => t.completedAt).length;
+    const progress = n ? done / n : 0;
     const sel = k === ui.day;
     cells.push(`<button class="day ${sel ? 'selected' : ''} ${k === today ? 'today' : ''}" data-action="select-day" data-day="${k}" aria-label="${esc(fmt(k, { weekday: 'long', day: 'numeric', month: 'long' }))}">
       <span class="wd">${fmt(k, { weekday: 'narrow' })}</span>
