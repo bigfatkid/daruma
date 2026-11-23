@@ -132,8 +132,11 @@ function normalize(s) {
   if (!s.catchUpV2 && Array.isArray(s.habits)) s.habits.forEach((h) => { if (isObj(h)) delete h.catchUp; });
   // Einmalig: Wasser und Schlaf zählen pro Tipp um 1 (Mattis Wunsch).
   if (!s.stepV2 && Array.isArray(s.habits)) s.habits.forEach((h) => { if (isObj(h) && (h.name === 'Wasser trinken' || h.name === 'Schlafdauer') && h.step === 0.5) h.step = 1; });
+  // Einmalig: Projekt-Aufgaben rutschen jetzt wie To-Dos weiter. Alte, vergangene Planungen gehen zurück ins Projekt.
+  if (!s.projRollV2 && Array.isArray(s.todos)) s.todos.forEach((t) => { if (isObj(t) && t.listId && !t.completedAt && typeof t.plannedDay === 'string' && t.plannedDay < todayKey()) t.plannedDay = null; });
   return {
     version: 1,
+    projRollV2: true,
     name: typeof s.name === 'string' ? s.name : '',
     setupDone: s.setupDone !== false, // bestehende Daten (ohne Feld) gelten als eingerichtet
     tourDone: !!s.tourDone,
@@ -308,18 +311,18 @@ function rate(h, days) {
 }
 
 /* ---------- To-Do-Logik ----------
-   Normale To-Dos haben einen Tag (plannedDay). Unerledigtes rutscht automatisch auf heute.
-   Pool-Einträge (listId) erscheinen nur an dem Tag, für den sie geholt wurden, danach wieder im Pool. */
+   To-Dos und geplante Projekt-Aufgaben haben einen Tag (plannedDay). Unerledigtes rutscht automatisch auf heute.
+   Projekt-Aufgaben ohne Tag (plannedDay null) warten im Projekt. */
 function todoAppears(t, d, today) {
   if (t.completedAt) return t.completedAt === d;
   if (!t.listId && !rollsOver(t)) return t.plannedDay === d; // verfällt an seinem Tag
   if (!t.plannedDay || d < today) return false;
-  if (!t.listId && d === today) return t.plannedDay <= d;
+  if (d === today) return t.plannedDay <= d;
   return t.plannedDay === d;
 }
-const inPool = (t, today) => !!t.listId && !t.completedAt && (!t.plannedDay || t.plannedDay < today);
+const inPool = (t) => !!t.listId && !t.completedAt && !t.plannedDay;
 const subsText = (t) => (t.subs && t.subs.length ? `${t.subs.filter((x) => x.done).length}/${t.subs.length} Schritte` : '');
-const carriedOver = (t, today) => rollsOver(t) && !t.listId && !t.completedAt && t.plannedDay && t.plannedDay < today;
+const carriedOver = (t, today) => rollsOver(t) && !t.completedAt && t.plannedDay && t.plannedDay < today;
 const listById = (id) => state.lists.find((l) => l.id === id);
 const todoById = (id) => state.todos.find((t) => t.id === id);
 const habitById = (id) => state.habits.find((h) => h.id === id);
@@ -482,7 +485,7 @@ function renderMonthSheet() {
   for (let n = 1; n <= days; n++) {
     const k = `${m}-${String(n).padStart(2, '0')}`;
     const fut = k > today, p = fut ? 0 : dayProgress(k, today);
-    cells.push(`<button class="m-day ${k === ui.day ? 'selected' : ''} ${k === today ? 'today' : ''} ${fut ? 'future' : ''} ${p >= 1 ? 'full' : ''}" data-action="month-pick" data-day="${k}"><span>${n}</span>${fut ? '<i></i>' : weekRing(p, k === ui.day, false)}</button>`);
+    cells.push(`<button class="m-day ${k === ui.day ? 'selected' : ''} ${k === today ? 'today' : ''} ${fut ? 'future' : ''} ${p >= 1 ? 'full' : ''}" data-action="month-pick" data-day="${k}"><span>${n}</span>${fut ? '<i></i>' : p >= 1 ? darumaSVG(true) : weekRing(p, k === ui.day, false)}</button>`);
   }
   const title = new Date(y, mo - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
   const body = `<div class="m-nav"><button class="link" data-action="month-shift" data-n="-1" aria-label="Voriger Monat">${ICON.left}</button><strong>${esc(title)}</strong><button class="link" data-action="month-shift" data-n="1" aria-label="Nächster Monat">${ICON.right}</button></div>
@@ -930,10 +933,8 @@ function renderHabits() {
 function todoRow(t, today, future) {
   const list = t.listId ? listById(t.listId) : null;
   const done = !!t.completedAt;
-  let tag = '';
-  if (list) tag = `aus ${list.name}`;
-  if (subsText(t)) tag = tag ? `${tag} · ${subsText(t)}` : subsText(t);
-  else if (carriedOver(t, today)) tag = `seit ${t.plannedDay < addDays(today, -6) ? fmt(t.plannedDay, { day: 'numeric', month: 'long' }) : fmt(t.plannedDay, { weekday: 'long' })}`;
+  const tag = [list ? `aus ${list.name}` : '', subsText(t),
+    carriedOver(t, today) ? `seit ${t.plannedDay < addDays(today, -6) ? fmt(t.plannedDay, { day: 'numeric', month: 'long' }) : fmt(t.plannedDay, { weekday: 'long' })}` : ''].filter(Boolean).join(' · ');
   return swipeRow('todo', t.id, `
     <button class="row-main" data-action="edit-todo" data-id="${t.id}">
       <span class="emoji">${pic(list ? list.icon : '📌')}</span>
@@ -949,7 +950,7 @@ function renderPool() {
   if (list) return renderPoolList(list, today);
 
   const lists = [...state.lists].sort(byOrder);
-  const open = state.todos.filter((t) => inPool(t, today));
+  const open = state.todos.filter((t) => inPool(t));
   const head = `<header class="nav"><div class="nav-side"></div><div class="nav-side right"></div></header>
     <h1 class="large-title">Projekte</h1>`;
 
@@ -968,7 +969,8 @@ function renderPool() {
     </button></div>
     <h3 class="section-title">Deine Projekte</h3>
     <div class="card">${lists.map((l) => {
-      const n = state.todos.filter((t) => t.listId === l.id && inPool(t, today)).length;
+      const all = state.todos.filter((t) => t.listId === l.id);
+      const n = all.length ? `${all.filter((t) => t.completedAt).length} von ${all.length}` : '';
       return `<div class="row"><button class="row-main" data-action="open-list" data-id="${l.id}">
         <span class="emoji">${pic(l.icon)}</span><span class="name" style="flex:1">${esc(l.name)}</span>
         <span class="count">${n}</span><svg class="chevron" viewBox="0 0 8 14">${ICON.right.replace(/<\/?svg[^>]*>/g, '')}</svg>
@@ -997,11 +999,12 @@ function renderPoolList(list, today) {
     <h1 class="large-title list-title">${pic(list.icon)} ${esc(list.name)}</h1>
     <div class="card">
       ${open.map((t) => {
-        const planned = t.plannedDay && t.plannedDay >= today;
+        const planned = !!t.plannedDay;
         return `<div class="row">
+          <button class="status-btn" data-action="pool-done" data-id="${t.id}" aria-label="Erledigt"><span class="todo-box"></span></button>
           <button class="row-main" data-action="edit-todo" data-id="${t.id}"><span class="name-wrap"><span class="name">${esc(t.title)}</span>${subsText(t) ? `<span class="tag">${subsText(t)}</span>` : ''}</span></button>
           <div class="controls">${planned
-            ? `<button class="pill filled" data-action="unplan" data-id="${t.id}">${planLabel(t.plannedDay, today)} ✓</button>`
+            ? `<button class="pill filled" data-action="unplan" data-id="${t.id}">${planLabel(t.plannedDay < today ? today : t.plannedDay, today)} ✓</button>`
             : `<button class="pill" data-action="plan-today" data-id="${t.id}">Auf Heute</button>`}</div>
         </div>`;
       }).join('')}
@@ -1011,7 +1014,7 @@ function renderPoolList(list, today) {
         <button class="pill add-btn" type="submit">Hinzufügen</button>
       </form>
     </div>
-    <p class="section-footer">„Auf Heute“ holt eine Aufgabe in deinen Tag. Für einen anderen Tag auf die Aufgabe tippen. Was du nicht schaffst, landet wieder hier im Projekt.</p>
+    <p class="section-footer">„Auf Heute“ holt eine Aufgabe in deinen Tag. Für einen anderen Tag auf die Aufgabe tippen. Nicht geschafft? Dann rutscht sie auf den nächsten Tag.</p>
     ${done.length ? `<h3 class="section-title">Erledigt</h3><div class="card">${done.map((t) => `<div class="row">
       <span class="row-main"><span class="name struck">${esc(t.title)}</span></span>
       <div class="controls"><button class="small-link" data-action="restore" data-id="${t.id}">Zurückholen</button></div>
@@ -1019,34 +1022,98 @@ function renderPoolList(list, today) {
   `;
 }
 
+// Regal: ein Daruma pro Monat, füllt sich von unten mit Rot je nach Augen-Tagen
+function renderShelf(today) {
+  const starts = [state.firstUse, ...state.habits.map((h) => h.createdAt), ...Object.keys(state.logs).map((k) => k.split('|')[1])].filter(Boolean).sort();
+  const first = (starts[0] || today).slice(0, 7);
+  const months = [];
+  let m = today.slice(0, 7);
+  while (months.length < 5) {
+    months.unshift(m);
+    if (m <= first) break;
+    const [y, mo] = m.split('-').map(Number);
+    m = mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`;
+  }
+  let gid = 0;
+  const figure = (p) => {
+    const one = () => { gid++; return darumaSVG(true).replace(/id="dr"/, `id="sh${gid}"`).replace('url(#dr)', `url(#sh${gid})`); };
+    return `<span class="shelf-d"><span class="bg">${one()}</span><span class="fg" style="clip-path:inset(${Math.round((1 - p) * 100)}% 0 0 0)">${one()}</span></span>`;
+  };
+  const items = months.map((mk) => {
+    const [y, mo] = mk.split('-').map(Number);
+    const days = new Date(y, mo, 0).getDate();
+    let eyes = 0, counted = 0;
+    for (let n = 1; n <= days; n++) {
+      const k = `${mk}-${String(n).padStart(2, '0')}`;
+      if (k > today) break;
+      counted++;
+      if (dayProgress(k, today) >= 1) eyes++;
+    }
+    const total = mk === today.slice(0, 7) ? counted : days;
+    const name = new Date(y, mo - 1, 1).toLocaleDateString('de-DE', { month: 'short' }).replace('.', '');
+    return { fig: figure(total ? eyes / total : 0), label: `${name} ${eyes}`, now: mk === today.slice(0, 7) };
+  });
+  return `<div class="card shelf"><div class="shelf-row">${items.map((i) => i.fig).join('')}</div><div class="shelf-plank"></div>
+    <div class="shelf-labels">${items.map((i) => `<span class="${i.now ? 'now' : ''}">${esc(i.label)}</span>`).join('')}</div></div>`;
+}
+
+// Zusammenhänge: Check-in-Wert an Tagen mit Habit vs. ohne (erst ab genug Daten)
+function insights(today) {
+  const out = [];
+  const qs = state.checkinQuestions.filter((q) => q.type === 'scale');
+  for (const q of qs) {
+    const days = [];
+    for (let i = 0; i < 120; i++) { const d = addDays(today, -i), v = checkinFor(d)[q.id]; if (answered(v)) days.push([d, v]); }
+    if (days.length < 21) continue;
+    for (const h of state.habits) {
+      const yes = [], no = [];
+      days.forEach(([d, v]) => { if (d < h.createdAt) return; if (isDone(h, d)) yes.push(v); else if (isActive(h, d) || isWeekly(h)) no.push(v); });
+      if (yes.length < 5 || no.length < 5) continue;
+      const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+      const diff = avg(yes) - avg(no);
+      if (Math.abs(diff) >= 0.5) out.push({ h, q, diff });
+    }
+  }
+  return out.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)).slice(0, 3);
+}
+
 function renderProgress() {
   const today = todayKey();
   const habits = [...state.habits].sort(byOrder);
+  ui.openStats = ui.openStats || {};
   const rows = habits.map((h) => {
     const s = streak(h);
-    const w = rate(h, 7), m = rate(h, 30);
-    const dots = [];
-    for (let i = 13; i >= 0; i--) {
+    const boxes = [];
+    for (let i = 6; i >= 0; i--) {
       const d = addDays(today, -i);
       const cls = isDone(h, d) ? 'on' : isWeekly(h) || !isActive(h, d) ? 'off' : '';
-      dots.push(`<i class="${cls}" title="${esc(fmt(d, { weekday: 'short', day: 'numeric', month: 'short' }))}"></i>`);
+      boxes.push(`<i class="${cls}" title="${esc(fmt(d, { weekday: 'short', day: 'numeric', month: 'short' }))}"></i>`);
     }
-    return `<div class="stat">
-      <div class="stat-head"><span class="emoji">${pic(h.icon)}</span><span class="name">${esc(h.name)}</span><span class="streak">${s > 0 ? `🔥 ${s} ${isWeekly(h) ? (s === 1 ? 'Woche' : 'Wochen') : (s === 1 ? 'Tag' : 'Tage')}` : ''}</span></div>
-      <div class="stat-sub">Woche ${w === null ? '–' : w + ' %'} · 30 Tage ${m === null ? '–' : m + ' %'}</div>
-      ${h.kind === 'choice' && pickStats(h, 30).length ? `<div class="stat-sub pick-stats">${pickStats(h, 30).map(([n, c]) => `<span>${esc(n)} <b>${c}×</b></span>`).join('')}</div>` : ''}
-      <div class="dots">${dots.join('')}</div>
+    const opts = h.kind === 'choice' ? pickStats(h, 3650) : [];
+    const open = opts.length && ui.openStats[h.id];
+    const max = opts.length ? opts[0][1] : 1;
+    const nameHtml = `<span class="p-name">${esc(h.name)}</span>${opts.length ? `<svg class="p-chev ${open ? 'up' : ''}" viewBox="0 0 14 8"><path d="m1 1 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>` : ''}`;
+    return `<div class="p-row">
+      ${opts.length ? `<button class="p-main" data-action="toggle-stats" data-id="${h.id}">` : '<div class="p-main">'}
+        <span class="emoji">${pic(h.icon)}</span><span class="p-title">${nameHtml}</span>
+        <span class="p-boxes">${boxes.join('')}</span><span class="p-streak">${s > 0 ? s : ''}</span>
+      ${opts.length ? '</button>' : '</div>'}
+      ${open ? `<div class="p-opts">${opts.map(([n, c]) => `<div class="p-opt"><span>${esc(n)}</span><span class="p-bar"><i style="width:${Math.round(c / max * 100)}%"></i></span><b>${c}×</b></div>`).join('')}</div>` : ''}
     </div>`;
   }).join('');
 
-  const doneTodos = state.todos.filter((t) => t.completedAt && t.completedAt > addDays(today, -7)).length;
+  const ins = insights(today);
+  const insHtml = ins.length ? `<h3 class="section-title">Zusammenhänge</h3><div class="card">${ins.map(({ h, q, diff }) => `<div class="p-row"><div class="p-main">
+      <span class="p-title"><span class="p-name">${esc(h.name)} <span class="p-arrow">→ ${esc(q.text)}</span></span></span>
+      <span class="p-diff">${diff > 0 ? '+' : '−'}${num(Math.round(Math.abs(diff) * 10) / 10)}</span></div></div>`).join('')}</div>` : '';
 
   return `
     <header class="nav"><div class="nav-side"></div><div class="nav-side right"><button class="icon-btn" data-action="open-settings" aria-label="Einstellungen">${ICON.gear}</button></div></header>
     <h1 class="large-title">Fortschritt</h1>
+    ${renderShelf(today)}
+    <h3 class="section-title">Habits</h3>
     <div class="card">${rows || '<p class="empty">Noch keine Habits angelegt.</p>'}</div>
-    <p class="section-footer">Serie = Tage am Stück. Die Kästchen zeigen die letzten 14 Tage. In den letzten 7 Tagen hast du ${doneTodos} ${doneTodos === 1 ? 'To-Do' : 'To-Dos'} erledigt.</p>
-
+    ${insHtml}
     ${renderCheckinStats(today)}
   `;
 }
@@ -1141,7 +1208,7 @@ function renderSheet() {
         <div class="segmented" style="margin-bottom:10px">${[...(dr.isPool ? [['none', 'Offen']] : []), ['today', 'Heute'], ['tomorrow', 'Morgen'], ['date', 'Datum']].map(([k, l]) => `<button class="${dr.when === k ? 'on' : ''}" data-action="set-when" data-when="${k}">${l}</button>`).join('')}</div>
         ${dr.when === 'date' ? `<label class="form-row"><span>Datum</span><input type="date" data-field="date" value="${esc(dr.date)}" min="${today}"></label>` : ''}
       </div>
-      <p class="section-footer">${dr.isPool ? 'Am geplanten Tag steht die Aufgabe auf Heute. Nicht geschafft? Dann wartet sie wieder im Projekt.' : 'Nicht geschafft? Dann rutscht es automatisch auf den nächsten Tag.'}</p>
+      <p class="section-footer">Nicht geschafft? Dann rutscht es automatisch auf den nächsten Tag.${dr.isPool ? ' „Offen“ legt es zurück ins Projekt.' : ''}</p>
       ${!dr.isPool ? '' : `<h3 class="section-title">Unteraufgaben</h3>
       <div class="card">
         ${dr.subs.map((x, i) => `<div class="row">
@@ -1219,7 +1286,7 @@ function renderSheet() {
     const t = todoById(s.id);
     if (!t) return '';
     const list = listById(t.listId);
-    const others = state.todos.filter((x) => inPool(x, todayKey())).length > 1;
+    const others = state.todos.filter((x) => inPool(x)).length > 1;
     return `<div class="overlay center" data-action="overlay"><div class="dialog">
       <div class="big">${pic(list ? list.icon : '🎲')}</div>
       <h3>Wie wäre es damit?</h3>
@@ -1375,7 +1442,7 @@ function savePicks(names) {
 function todoDraft(t) {
   const today = todayKey();
   if (!t) return { id: null, title: '', when: 'today', date: addDays(today, 2), isPool: false, subs: [], rollover: true };
-  let when = t.listId && (!t.plannedDay || t.plannedDay < today) ? 'none' : 'today';
+  let when = t.listId && !t.plannedDay ? 'none' : 'today';
   if (t.plannedDay === addDays(today, 1)) when = 'tomorrow';
   else if (t.plannedDay && t.plannedDay > addDays(today, 1)) when = 'date';
   const date = t.plannedDay && t.plannedDay > today ? t.plannedDay : addDays(today, 2);
@@ -1438,7 +1505,7 @@ function saveList() {
 
 function pickSurprise() {
   const today = todayKey();
-  const open = state.todos.filter((t) => inPool(t, today));
+  const open = state.todos.filter((t) => inPool(t));
   if (!open.length) return;
   const current = ui.sheet && ui.sheet.type === 'surprise' ? ui.sheet.id : null;
   const choices = open.length > 1 ? open.filter((t) => t.id !== current) : open;
@@ -1518,6 +1585,7 @@ const actions = {
   'tour-start'() { startTour(); },
   tab(el) { ui.tab = el.dataset.tab; if (ui.tab === 'pool') ui.poolListId = null; window.scrollTo(0, 0); render(); },
   'go-today'() { ui.day = todayKey(); render(); },
+  'toggle-stats'(el) { ui.openStats = ui.openStats || {}; ui.openStats[el.dataset.id] = !ui.openStats[el.dataset.id]; render(); },
   'open-month'() { ui.month = ui.day.slice(0, 7); openSheet({ type: 'month' }); },
   'month-shift'(el) {
     const [y, m] = ui.month.split('-').map(Number);
@@ -1556,6 +1624,7 @@ const actions = {
     if (!t.completedAt && t.listId && (!t.plannedDay || t.plannedDay < todayKey())) t.plannedDay = todayKey();
     commit();
   },
+  'pool-done'(el) { todoById(el.dataset.id).completedAt = todayKey(); commit(); toast('Erledigt'); },
   'edit-todo'(el) { openSheet({ type: 'todo-editor' }, todoDraft(todoById(el.dataset.id))); },
   'focus-new-todo'() { if (ui.day < todayKey()) ui.day = todayKey(); ui.focus = '#todo-new'; render(); const el = document.getElementById('todo-new'); if (el) el.scrollIntoView({ block: 'center' }); },
   'new-todo'() { openSheet({ type: 'todo-editor' }, todoDraft(null), '#todo-title'); },
