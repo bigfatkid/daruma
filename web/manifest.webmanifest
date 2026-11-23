@@ -1,7 +1,7 @@
 {
   "name": "Daruma",
   "short_name": "Daruma",
-  "description": "Habits, To-Dos und ein Pool für Langzeit-Aufgaben.",
+  "description": "Habits, To-Dos und Projekte für Langzeit-Aufgaben.",
   "lang": "de",
   "start_url": "./",
   "scope": "./",

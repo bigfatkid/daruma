@@ -1,7 +1,7 @@
 'use strict';
 
 /* =====================================================================
-   Daruma – Habits, To-Dos und ein Pool für Langzeit-Aufgaben.
+   Daruma – Habits, To-Dos und Projekte für Langzeit-Aufgaben.
    Alle Daten liegen nur auf diesem Gerät (localStorage).
    ===================================================================== */
 
@@ -228,7 +228,7 @@ const ICON = {
   left: '<svg viewBox="0 0 8 14"><path d="M7 1 1 7l6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   right: '<svg viewBox="0 0 8 14"><path d="m1 1 6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   sun: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="13" cy="13" r="4.6"/><path d="M13 2.5v2.6M13 20.9v2.6M2.5 13h2.6M20.9 13h2.6M5.6 5.6l1.8 1.8M18.6 18.6l1.8 1.8M5.6 20.4l1.8-1.8M18.6 7.4l1.8-1.8"/></svg>',
-  tray: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3.5 14.5 6.5 5h13l3 9.5V21H3.5z"/><path d="M3.5 14.5h6a3.5 3.5 0 0 0 7 0h6"/></svg>',
+  tray: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4.6l2.2 2.5h8.2a2 2 0 0 1 2 2V19a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2z"/><path d="M3.5 11h19"/></svg>',
   loop: '<svg viewBox="0 0 26 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5V11a5 5 0 0 1 5-5h12"/><path d="m17.5 2.5 3.5 3.5-3.5 3.5"/><path d="M22 13.5V15a5 5 0 0 1-5 5H5"/><path d="m8.5 23.5-3.5-3.5 3.5-3.5"/></svg>',
   chart: '<svg viewBox="0 0 26 26" fill="currentColor"><rect x="3.5" y="13" width="5" height="9" rx="1.5"/><rect x="10.5" y="8" width="5" height="14" rx="1.5"/><rect x="17.5" y="4" width="5" height="18" rx="1.5"/></svg>',
 };
@@ -378,7 +378,7 @@ function toggleRow(label, on, attrs) {
 const TOUR = [
   ['today', 'Heute', 'Hier hakst du deine Habits ab und erledigst To-Dos. Mit + legst du ein To-Do an, oben wechselst du zwischen den Tagen.'],
   ['habits', 'Habits', 'Hier legst du Habits an, änderst Ziel und Häufigkeit und bestimmst die Reihenfolge.'],
-  ['pool', 'Pool', 'Für Langzeit-Aufgaben: eigene Listen, Einträge mit Unteraufgaben. Wenn du Lust hast, holst du dir etwas auf Heute.'],
+  ['pool', 'Projekte', 'Für größere Vorhaben: Lege Projekte an, sammle Aufgaben mit Unteraufgaben und hol dir bei Lust etwas auf Heute.'],
   ['progress', 'Fortschritt', 'Serien und Quoten für jedes Habit. Unten kannst du eine Sicherung deiner Daten herunterladen.'],
 ];
 function renderTour() {
@@ -396,7 +396,7 @@ function startTour() { ui.tour = 0; ui.tab = TOUR[0][0]; ui.poolListId = null; w
 
 function renderTabbar() {
   const tab = (id, label, icon) => `<button class="tab ${ui.tab === id ? 'active' : ''}" data-action="tab" data-tab="${id}">${icon}<span>${label}</span></button>`;
-  return `<nav class="tabbar ${ui.tour !== null ? 'touring' : ''}">${tab('today', 'Heute', ICON.sun)}${tab('habits', 'Habits', ICON.loop)}${tab('pool', 'Pool', ICON.tray)}${tab('progress', 'Fortschritt', ICON.chart)}</nav>`;
+  return `<nav class="tabbar ${ui.tour !== null ? 'touring' : ''}">${tab('today', 'Heute', ICON.sun)}${tab('habits', 'Habits', ICON.loop)}${tab('pool', 'Projekte', ICON.tray)}${tab('progress', 'Fortschritt', ICON.chart)}</nav>`;
 }
 
 function dayTitle(d, today) {
@@ -470,7 +470,7 @@ function renderToday() {
     <h3 class="section-title">To-Dos</h3>
     <div class="card">
       ${todos.length ? todos.map((t) => todoRow(t, today, future)).join('')
-        : d === today ? '<p class="empty">Nichts offen. <button class="link" data-action="tab" data-tab="pool">Lust auf mehr? Schau in den Pool.</button></p>'
+        : d === today ? '<p class="empty">Nichts offen. <button class="link" data-action="tab" data-tab="pool">Lust auf mehr? Schau in deine Projekte.</button></p>'
         : '<p class="empty">Keine To-Dos an diesem Tag.</p>'}
     </div>
   `;
@@ -595,23 +595,23 @@ function renderPool() {
   const lists = [...state.lists].sort(byOrder);
   const open = state.todos.filter((t) => inPool(t, today));
   const head = `<header class="nav"><div class="nav-side"></div>
-    <div class="nav-side right"><button class="icon-btn" data-action="new-list" aria-label="Neue Liste">${ICON.plus}</button></div></header>
-    <h1 class="large-title">Pool</h1>`;
+    <div class="nav-side right"><button class="icon-btn" data-action="new-list" aria-label="Neues Projekt">${ICON.plus}</button></div></header>
+    <h1 class="large-title">Projekte</h1>`;
 
   if (!lists.length) {
     return `${head}<div class="card empty-state">
-      <div class="big">🪣</div>
-      <h2>Noch keine Listen</h2>
-      <p>Hier sammelst du Dinge, die nicht jeden Tag dran sind. Wenn du Zeit und Lust hast, holst du dir etwas davon auf Heute.</p>
-      <button class="btn-primary" data-action="new-list">Erste Liste anlegen</button>
+      <div class="big">📁</div>
+      <h2>Noch keine Projekte</h2>
+      <p>Hier sammelst du größere Vorhaben und ihre Aufgaben, z.B. „Urlaub planen“ oder „Wohnung renovieren“. Wenn du Zeit und Lust hast, holst du dir eine Aufgabe auf Heute.</p>
+      <button class="btn-primary" data-action="new-list">Erstes Projekt anlegen</button>
     </div>`;
   }
 
   return `${head}
     <div class="card"><button class="surprise" data-action="surprise" ${open.length ? '' : 'disabled'}>
-      <span class="big">🎲</span><span><strong>Überrasch mich</strong><span class="sub">${open.length ? `Ein zufälliger Vorschlag aus ${open.length} offenen Einträgen` : 'Gerade ist nichts offen'}</span></span>
+      <span class="big">🎲</span><span><strong>Überrasch mich</strong><span class="sub">${open.length ? `Eine zufällige Aufgabe aus ${open.length} offenen` : 'Gerade ist nichts offen'}</span></span>
     </button></div>
-    <h3 class="section-title">Listen</h3>
+    <h3 class="section-title">Deine Projekte</h3>
     <div class="card">${lists.map((l) => {
       const n = state.todos.filter((t) => t.listId === l.id && inPool(t, today)).length;
       return `<div class="row"><button class="row-main" data-action="open-list" data-id="${l.id}">
@@ -627,7 +627,7 @@ function renderPoolList(list, today) {
   const done = items.filter((t) => t.completedAt).sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
   return `
     <header class="nav">
-      <div class="nav-side"><button class="back" data-action="close-list">${ICON.back}<span>Pool</span></button></div>
+      <div class="nav-side"><button class="back" data-action="close-list">${ICON.back}<span>Projekte</span></button></div>
       <div class="nav-side right"><button class="link" data-action="edit-list" data-id="${list.id}">Bearbeiten</button></div>
     </header>
     <h1 class="large-title">${list.icon} ${esc(list.name)}</h1>
@@ -643,10 +643,10 @@ function renderPoolList(list, today) {
       }).join('')}
       <form class="row add-row" data-form="add-pool-item">
         <span class="plus">+</span>
-        <input id="pool-new" name="title" placeholder="Neuer Eintrag" autocomplete="off" enterkeyhint="done">
+        <input id="pool-new" name="title" placeholder="Neue Aufgabe" autocomplete="off" enterkeyhint="done">
       </form>
     </div>
-    <p class="section-footer">Tippe auf „Auf Heute“, um dir etwas in deinen Tag zu holen. Was du nicht schaffst, landet morgen wieder hier.</p>
+    <p class="section-footer">Tippe auf „Auf Heute“, um dir etwas in deinen Tag zu holen. Was du nicht schaffst, landet morgen wieder hier im Projekt.</p>
     ${done.length ? `<h3 class="section-title">Erledigt</h3><div class="card">${done.map((t) => `<div class="row">
       <span class="row-main"><span class="name struck">${esc(t.title)}</span></span>
       <div class="controls"><button class="small-link" data-action="restore" data-id="${t.id}">Zurückholen</button></div>
@@ -710,7 +710,7 @@ function renderSheet() {
       <div class="sheet-body"><div class="card">
         <button class="menu-option" data-action="open-catalog"><span class="big">🔁</span><span><strong>Habit</strong><span class="sub">Jeden Tag oder an bestimmten Wochentagen</span></span></button>
         <button class="menu-option" data-action="new-todo"><span class="big">📌</span><span><strong>To-Do</strong><span class="sub">Einmalig, für heute oder einen anderen Tag</span></span></button>
-        <button class="menu-option" data-action="go-pool-new"><span class="big">🪣</span><span><strong>Pool-Liste</strong><span class="sub">Für Dinge, die du irgendwann machen willst</span></span></button>
+        <button class="menu-option" data-action="go-pool-new"><span class="big">📁</span><span><strong>Projekt</strong><span class="sub">Für größere Vorhaben mit mehreren Aufgaben</span></span></button>
       </div></div></div></div>`;
   }
 
@@ -777,10 +777,10 @@ function renderSheet() {
       <p class="section-footer">Große Aufgaben in kleine Schritte teilen, z.B. „Flüge vergleichen“, „Hotel buchen“.</p>
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
       ${isNew ? '' : `<div class="card" style="margin-top:28px">
-        ${t && t.listId && !t.completedAt && t.plannedDay && t.plannedDay >= today ? '<button class="btn-plain" style="color:var(--accent)" data-action="back-to-pool">Zurück in den Pool</button>' : ''}
+        ${t && t.listId && !t.completedAt && t.plannedDay && t.plannedDay >= today ? '<button class="btn-plain" style="color:var(--accent)" data-action="back-to-pool">Zurück ins Projekt</button>' : ''}
         <button class="btn-danger" data-action="delete-todo">${dr.confirmDelete ? 'Wirklich löschen? Nochmal tippen' : 'Löschen'}</button>
       </div>`}`;
-    return sheetShell(isNew ? 'Neues To-Do' : (dr.isPool ? 'Eintrag bearbeiten' : 'To-Do bearbeiten'), cancelBtn,
+    return sheetShell(isNew ? 'Neues To-Do' : (dr.isPool ? 'Aufgabe bearbeiten' : 'To-Do bearbeiten'), cancelBtn,
       `<button class="link" style="font-weight:600" data-action="save-todo">${isNew ? 'Hinzufügen' : 'Sichern'}</button>`, body);
   }
 
@@ -788,12 +788,12 @@ function renderSheet() {
     const isNew = !dr.id;
     const body = `
       <h3 class="section-title">Name</h3>
-      <input class="field" id="list-name" data-field="name" value="${esc(dr.name)}" placeholder="z.B. Haushalt, Lesen, Irgendwann" autocomplete="off" enterkeyhint="done">
+      <input class="field" id="list-name" data-field="name" value="${esc(dr.name)}" placeholder="z.B. Urlaub planen, Wohnung, Steuer" autocomplete="off" enterkeyhint="done">
       <h3 class="section-title">Symbol</h3>
       <div class="card"><div class="icon-grid">${LIST_ICONS.map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${i}</button>`).join('')}</div></div>
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
-      ${isNew ? '' : `<div class="card" style="margin-top:28px"><button class="btn-danger" data-action="delete-list">${dr.confirmDelete ? 'Liste mit allen Einträgen löschen?' : 'Liste löschen'}</button></div>`}`;
-    return sheetShell(isNew ? 'Neue Liste' : 'Liste bearbeiten', cancelBtn,
+      ${isNew ? '' : `<div class="card" style="margin-top:28px"><button class="btn-danger" data-action="delete-list">${dr.confirmDelete ? 'Projekt mit allen Aufgaben löschen?' : 'Projekt löschen'}</button></div>`}`;
+    return sheetShell(isNew ? 'Neues Projekt' : 'Projekt bearbeiten', cancelBtn,
       `<button class="link" style="font-weight:600" data-action="save-list">${isNew ? 'Anlegen' : 'Sichern'}</button>`, body);
   }
 
@@ -946,7 +946,7 @@ function saveTodo() {
 function saveList() {
   const dr = ui.draft;
   const name = (dr.name || '').trim();
-  if (!name) return fail('Bitte gib der Liste einen Namen.');
+  if (!name) return fail('Bitte gib dem Projekt einen Namen.');
   if (dr.id) Object.assign(listById(dr.id), { name, icon: dr.icon });
   else {
     const list = { id: uid(), name, icon: dr.icon, order: nextOrder(state.lists) };
@@ -1037,7 +1037,7 @@ const actions = {
     state.todos = state.todos.filter((t) => t.id !== ui.draft.id);
     ui.sheet = null; ui.draft = null; commit();
   },
-  'back-to-pool'() { const t = todoById(ui.draft.id); t.plannedDay = null; ui.sheet = null; ui.draft = null; persist(); toast('Zurück im Pool'); },
+  'back-to-pool'() { const t = todoById(ui.draft.id); t.plannedDay = null; ui.sheet = null; ui.draft = null; persist(); toast('Zurück im Projekt'); },
 
   'open-add'() { openSheet({ type: 'add-menu' }); },
   'open-catalog'() { openSheet({ type: 'catalog' }); },

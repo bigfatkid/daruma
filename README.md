@@ -6,7 +6,7 @@
 >
 > Die native iPhone-App (SwiftUI) unten bleibt als Option erhalten.
 
-Eine iPhone-App für tägliche Habits, To-Dos und einen Pool aus Langzeit-Aufgaben.
+Eine iPhone-App für tägliche Habits, To-Dos und Projekte mit Langzeit-Aufgaben.
 Benannt nach der japanischen Daruma-Puppe: Ein Auge wird ausgemalt, wenn man sich ein Ziel setzt, das zweite, wenn man es erreicht hat.
 
 ## Stand (Version 0.1)
