@@ -618,3 +618,33 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 /* Erledigte Habits: blass, durchgestrichen, Haken im Stempel; Kreis rechts bleibt (v47) */
 .hab-row.is-done .row-main { opacity: .5; }
 .hab-row.is-done .name { text-decoration: line-through; }
+/* Kompakter Kopf auf Heute + Monatsansicht (v48) */
+.title-row { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; padding-left: 4px; }
+.title-row .large-title { flex: 1; margin: 0; font-size: 32px; }
+.today-link { font-size: 15px; font-weight: 600; }
+.cal-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--card); border: 1px solid var(--card-line); color: var(--accent); display: grid; place-items: center; flex: none; }
+.cal-btn svg { width: 20px; height: 20px; }
+.week-slim { padding: 6px 0 0; justify-content: space-between; gap: 0; touch-action: pan-y; }
+.week-slim .day { flex: 0 0 44px; }
+.hero-card { margin-top: 12px; }
+.hero-card .hero { padding: 10px 16px; gap: 14px; }
+.hero-card .daruma { width: 48px; height: 58px; margin-left: 2px; }
+.hero-card .daruma svg { width: 48px; height: 58px; }
+.hero-card .hero-text { gap: 4px; }
+.hero-card .hero-date { font-size: 13px; }
+.hero-card .hero-count { font-size: 17px; }
+.hero-card .hero-msg { font-size: 12.5px; }
+.m-nav { display: flex; align-items: center; justify-content: space-between; margin: 4px 4px 10px; }
+.m-nav strong { font-family: ui-serif, "New York", Georgia, serif; font-size: 19px; font-weight: 600; }
+.m-nav .link { width: 40px; height: 36px; display: grid; place-items: center; color: var(--secondary); }
+.m-nav .link svg { width: 9px; height: 16px; }
+.m-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 12px 8px; text-align: center; }
+.m-grid em { font-style: normal; font-size: 11px; font-weight: 600; color: var(--secondary); padding-bottom: 4px; }
+.m-day { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0 5px; border-radius: 10px; font-weight: 600; font-size: 15px; color: var(--text); }
+.m-day svg { width: 14px; height: 14px; display: block; }
+.m-day i { width: 14px; height: 14px; display: block; }
+.m-day.full { background: var(--accent-soft); }
+.m-day.today span { color: var(--accent); }
+.m-day.selected { background: var(--accent); }
+.m-day.selected span { color: #fff; }
+.m-day.future { color: var(--secondary); opacity: .6; }

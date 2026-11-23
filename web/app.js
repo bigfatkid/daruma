@@ -373,6 +373,27 @@ function renderCheckinStats(today) {
   return rows ? `<h3 class="section-title">Check-in</h3><div class="card">${rows}</div><p class="section-footer">Die Balken zeigen die letzten 14 Tage.</p>` : '';
 }
 
+function renderMonthSheet() {
+  const today = todayKey();
+  const m = ui.month || ui.day.slice(0, 7);
+  const [y, mo] = m.split('-').map(Number);
+  const first = `${m}-01`;
+  const days = new Date(y, mo, 0).getDate();
+  const pad = (parseDay(first).getDay() + 6) % 7; // Montag zuerst
+  const cells = [];
+  for (let i = 0; i < pad; i++) cells.push('<span></span>');
+  for (let n = 1; n <= days; n++) {
+    const k = `${m}-${String(n).padStart(2, '0')}`;
+    const fut = k > today, p = fut ? 0 : dayProgress(k, today);
+    cells.push(`<button class="m-day ${k === ui.day ? 'selected' : ''} ${k === today ? 'today' : ''} ${fut ? 'future' : ''} ${p >= 1 ? 'full' : ''}" data-action="month-pick" data-day="${k}"><span>${n}</span>${fut ? '<i></i>' : weekRing(p, k === ui.day, false)}</button>`);
+  }
+  const title = new Date(y, mo - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
+  const body = `<div class="m-nav"><button class="link" data-action="month-shift" data-n="-1" aria-label="Voriger Monat">${ICON.left}</button><strong>${esc(title)}</strong><button class="link" data-action="month-shift" data-n="1" aria-label="Nächster Monat">${ICON.right}</button></div>
+    <div class="card m-grid">${['M', 'D', 'M', 'D', 'F', 'S', 'S'].map((x) => `<em>${x}</em>`).join('')}${cells.join('')}</div>
+    <p class="section-footer">Rot hinterlegt: alles geschafft. Der Ring zeigt, wie viel erledigt war. Tippe auf einen Tag, um ihn zu öffnen.</p>`;
+  return sheetShell('Kalender', '<button class="link" data-action="month-today">Heute</button>', '<button class="link" style="font-weight:600" data-action="close-sheet">Fertig</button>', body);
+}
+
 function renderSettingsSheet() {
   const body = `
     <h3 class="section-title">Dein Name</h3>
@@ -628,19 +649,15 @@ function renderToday() {
     : 'Schaffst du alle, malt Daruma das zweite Auge aus.';
 
   return `
-    <header class="nav">
-      <div class="nav-side">${d !== today ? '<button class="link" data-action="go-today">Zu heute</button>' : ''}</div>
-      <div class="nav-side right"></div>
-    </header>
-    <h1 class="large-title">${esc(dayTitle(d, today))}</h1>
+    <div class="title-row"><h1 class="large-title">${esc(dayTitle(d, today))}</h1>${d !== today ? '<button class="link today-link" data-action="go-today">Zu heute</button>' : ''}<button class="cal-btn" data-action="open-month" aria-label="Monatsansicht"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></button></div>
 
-    <div class="card">${renderWeek(today)}</div>
+    ${renderWeek(today)}
 
-    <div class="card" style="margin-top:20px">
+    <div class="card hero-card">
       <div class="hero">
         <div class="daruma ${ui.wobble ? 'wobble' : ''}" data-action="poke" role="img" aria-label="${allDone ? 'Daruma mit beiden Augen' : 'Daruma mit einem Auge'}">${darumaSVG(allDone, popEye)}</div>
         <div class="hero-text">
-          <span class="hero-date">${esc(fmt(d, { weekday: 'long', day: 'numeric', month: 'long' }))}</span>
+          ${d !== today && d !== addDays(today, -1) && d !== addDays(today, 1) ? '' : `<span class="hero-date">${esc(fmt(d, { weekday: 'long', day: 'numeric', month: 'long' }))}</span>`}
           <span class="hero-count">${done} von ${total} erledigt</span>
           <div class="bar"><span style="width:${total ? (done / total) * 100 : 0}%"></span></div>
           <span class="hero-msg">${msg}</span>
@@ -676,16 +693,20 @@ function renderToday() {
   `;
 }
 
+function dayProgress(k, today) {
+  const active = state.habits.filter((h) => isActive(h, k));
+  const dayTodos = state.todos.filter((t) => todoAppears(t, k, today));
+  const n = active.length + dayTodos.length;
+  const done = active.filter((h) => isDone(h, k)).length + dayTodos.filter((t) => t.completedAt).length;
+  return n ? done / n : 0;
+}
+
 function renderWeek(today) {
   const start = weekStart(ui.day);
   const cells = [];
   for (let i = 0; i < 7; i++) {
     const k = addDays(start, i);
-    const active = state.habits.filter((h) => isActive(h, k));
-    const dayTodos = state.todos.filter((t) => todoAppears(t, k, today));
-    const n = active.length + dayTodos.length;
-    const done = active.filter((h) => isDone(h, k)).length + dayTodos.filter((t) => t.completedAt).length;
-    const progress = n ? done / n : 0;
+    const progress = dayProgress(k, today);
     const sel = k === ui.day;
     cells.push(`<button class="day ${sel ? 'selected' : ''} ${k === today ? 'today' : ''}" data-action="select-day" data-day="${k}" aria-label="${esc(fmt(k, { weekday: 'long', day: 'numeric', month: 'long' }))}">
       <span class="wd">${fmt(k, { weekday: 'narrow' })}</span>
@@ -693,11 +714,7 @@ function renderWeek(today) {
       ${weekRing(progress, sel, k > today)}
     </button>`);
   }
-  return `<div class="week">
-    <button class="shift" data-action="shift-week" data-n="-1" aria-label="Vorherige Woche">${ICON.left}</button>
-    ${cells.join('')}
-    <button class="shift" data-action="shift-week" data-n="1" aria-label="Nächste Woche">${ICON.right}</button>
-  </div>`;
+  return `<div class="week week-slim" data-swipe-week>${cells.join('')}</div>`;
 }
 
 function habitRow(h, d, future) {
@@ -914,6 +931,7 @@ function renderSheet() {
   const dr = ui.draft || {};
 
   if (s.type === 'settings') return renderSettingsSheet();
+  if (s.type === 'month') return renderMonthSheet();
   if (s.type === 'q-catalog') return renderQuestionCatalog();
   if (s.type === 'q-editor') return renderQuestionEditor();
   if (s.type === 'add-menu') {
@@ -1220,6 +1238,14 @@ const actions = {
   'tour-start'() { startTour(); },
   tab(el) { ui.tab = el.dataset.tab; if (ui.tab === 'pool') ui.poolListId = null; window.scrollTo(0, 0); render(); },
   'go-today'() { ui.day = todayKey(); render(); },
+  'open-month'() { ui.month = ui.day.slice(0, 7); openSheet({ type: 'month' }); },
+  'month-shift'(el) {
+    const [y, m] = ui.month.split('-').map(Number);
+    const dt = new Date(y, m - 1 + Number(el.dataset.n), 1);
+    ui.month = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`; render();
+  },
+  'month-pick'(el) { ui.day = el.dataset.day; closeSheet(); },
+  'month-today'() { ui.day = todayKey(); closeSheet(); },
   'select-day'(el) { ui.day = el.dataset.day; render(); },
   'shift-week'(el) { ui.day = addDays(ui.day, 7 * Number(el.dataset.n)); render(); },
   poke(el) { el.classList.remove('wobble'); void el.offsetWidth; el.classList.add('wobble'); },
@@ -1411,6 +1437,17 @@ function closeOpenSwipe() {
   if (openSwipe && openSwipe.isConnected) setSwipeX(openSwipe, 0, true);
   openSwipe = null;
 }
+let weekSwipe = null;
+document.addEventListener('touchstart', (ev) => {
+  const w = ev.target.closest('[data-swipe-week]');
+  weekSwipe = w && ev.touches.length === 1 ? { x: ev.touches[0].clientX, y: ev.touches[0].clientY } : null;
+}, { passive: true });
+document.addEventListener('touchend', (ev) => {
+  if (!weekSwipe) return;
+  const t = ev.changedTouches[0], dx = t.clientX - weekSwipe.x, dy = t.clientY - weekSwipe.y;
+  weekSwipe = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) { ui.day = addDays(ui.day, dx < 0 ? 7 : -7); swallowClick = true; render(); }
+});
 document.addEventListener('touchstart', (ev) => {
   const row = ev.target.closest('.swipe-row');
   if (openSwipe && !openSwipe.isConnected) openSwipe = null;
