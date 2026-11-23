@@ -598,3 +598,7 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .todo-box { width: 24px; height: 24px; border: 2px solid var(--secondary); border-radius: 7px; display: flex; align-items: center; justify-content: center; opacity: .7; }
 .todo-box.on { background: var(--accent); border-color: var(--accent); opacity: 1; }
 .todo-box svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+/* Heute-Reiter als Hanko-Stempel (v39) */
+.tab .hanko { width: 30px; height: 30px; margin-bottom: 1px; border-radius: 7px; background: var(--accent); color: #fff; font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; font-size: 12.5px; letter-spacing: -1px; display: flex; align-items: center; justify-content: center; transform: rotate(-4deg); opacity: .5; transition: opacity .2s; }
+.tab.active .hanko { opacity: 1; box-shadow: 0 3px 8px rgba(192, 57, 43, .3); }
+.tab.active:has(.hanko) { font-weight: 600; }

@@ -583,7 +583,7 @@ function startTour() { ui.tour = 0; ui.tab = TOUR[0][0]; ui.poolListId = null; w
 
 function renderTabbar() {
   const tab = (id, label, icon) => `<button class="tab ${ui.tab === id ? 'active' : ''}" data-action="tab" data-tab="${id}">${icon}<span>${label}</span></button>`;
-  return `<nav class="tabbar ${ui.tour !== null ? 'touring' : ''}">${tab('today', 'Heute', ICON.sun)}${tab('habits', 'Routinen', ICON.loop)}${tab('pool', 'Projekte', ICON.tray)}${tab('progress', 'Fortschritt', ICON.chart)}</nav>`;
+  return `<nav class="tabbar ${ui.tour !== null ? 'touring' : ''}">${tab('today', 'Heute', '<span class="hanko" aria-hidden="true">今日</span>')}${tab('habits', 'Routinen', ICON.loop)}${tab('pool', 'Projekte', ICON.tray)}${tab('progress', 'Fortschritt', ICON.chart)}</nav>`;
 }
 
 function dayTitle(d, today) {
