@@ -285,6 +285,12 @@ function sectionHead(key, title, closed, summary = '') {
   return `<button class="section-title fold ${closed ? 'closed' : ''}" data-action="fold" data-key="${key}" aria-expanded="${!closed}">
     <span>${title}</span>${closed && summary ? `<span class="fold-sum">${esc(summary)}</span>` : ''}<svg class="fold-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>`;
 }
+function habitsFolded(d, habits) {
+  // Sind alle Habits des Tages abgehakt, klappt der Bereich von selbst zu.
+  const o = (ui.habFold || {})[d];
+  if (o !== undefined) return o;
+  return isFolded('habits') || (habits.length > 0 && habits.every((h) => isDone(h, d)));
+}
 function isFolded(key) { return !!(state.collapsed || {})[key]; }
 function ciFolded(d) {
   // Check-in klappt nach dem Speichern zu; danach entscheidet der Tipp auf die Überschrift.
@@ -635,8 +641,10 @@ function renderToday() {
       </div>
     </div>
 
-    ${sectionHead('habits', 'Habits', isFolded('habits'), habits.length ? `${habits.filter((h) => isDone(h, d)).length} von ${habits.length} erledigt` : '')}
-    ${isFolded('habits') ? '' : `<div class="card">
+    ${renderCheckinCard(d, today)}
+
+    ${sectionHead('habits', 'Habits', habitsFolded(d, habits), habits.length ? `${habits.filter((h) => isDone(h, d)).length} von ${habits.length} erledigt` : '')}
+    ${habitsFolded(d, habits) ? '' : `<div class="card">
       ${habits.length ? habits.map((h) => habitRow(h, d, future)).join('') : (state.habits.length ? '<p class="empty">An diesem Tag stehen keine Habits an.</p>' : '<p class="empty">Noch keine Habits. <button class="link" data-action="tab" data-tab="habits">Im Reiter Routinen anlegen</button></p>')}
     </div>`}
 
@@ -648,7 +656,6 @@ function renderToday() {
       <div class="controls"><button class="pill" data-action="catch-up" data-id="${h.id}">Nachholen</button></div></div>`).join('')}</div>
     <p class="section-footer">Zählt für gestern. Was du heute nicht nachholst, verfällt. Pro Habit einstellbar.</p>` : ''}
 
-    ${renderCheckinCard(d, today)}
 
     ${sectionHead('todos', 'To-Dos', isFolded('todos'), todos.length ? `${todos.filter((t) => t.completedAt).length} von ${todos.length} erledigt` : 'keine')}
     ${isFolded('todos') ? '' : `<div class="card">
@@ -1313,6 +1320,14 @@ const actions = {
   },
   fold(el) {
     const k = el.dataset.key;
+    if (k === 'habits') {
+      const hs = state.habits.filter((h) => isActive(h, ui.day));
+      const now = !habitsFolded(ui.day, hs);
+      ui.habFold = ui.habFold || {}; ui.habFold[ui.day] = now;
+      state.collapsed = state.collapsed || {};
+      if (now) state.collapsed.habits = true; else delete state.collapsed.habits;
+      return commit();
+    }
     if (k === 'checkin') { ui.ciFold = ui.ciFold || {}; ui.ciFold[ui.day] = !ciFolded(ui.day); return render(); }
     state.collapsed = state.collapsed || {};
     if (state.collapsed[k]) delete state.collapsed[k]; else state.collapsed[k] = true;
