@@ -1288,7 +1288,7 @@ function renderSheet() {
     const today = todayKey();
     const cur = t.plannedDay && t.plannedDay < today ? today : t.plannedDay;
     const days = Array.from({ length: 8 }, (_, i) => addDays(today, i));
-    const label = (d, i) => i === 0 ? 'Heute' : i === 1 ? 'Morgen' : `${fmt(d, { weekday: 'short' })} ${fmt(d, { day: 'numeric' })}.`;
+    const label = (d, i) => i === 0 ? 'Heute' : i === 1 ? 'Morgen' : `${fmt(d, { weekday: 'short' })} ${fmt(d, { day: 'numeric', month: 'numeric' })}`;
     return `<div class="overlay center" data-action="overlay"><div class="dialog">
       <h3>${esc(t.title)}</h3>
       <div class="day-grid">${days.map((d, i) => `<button class="${cur === d ? 'on' : ''}" data-action="plan-set" data-day="${d}">${label(d, i)}</button>`).join('')}
