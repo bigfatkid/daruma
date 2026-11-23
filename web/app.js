@@ -309,8 +309,8 @@ function renderOnboarding() {
 
   if (ob.step === 0) {
     body = `<div class="ob-hero"><div class="daruma big-daruma wobble" data-action="poke">${darumaSVG(false)}</div>
-      <h1>Willkommen bei Daruma</h1>
-      <p>In Japan malt man der Daruma-Figur ein Auge aus, wenn man sich ein Ziel setzt, und das zweite, wenn man es erreicht hat. Hier bekommt sie ihr zweites Auge an jedem Tag, an dem du alle Habits schaffst.</p></div>
+      <h1>Kleine Schritte, jeden Tag.</h1>
+      <p>Daruma hilft dir, Habits, To-Dos und Projekte im Blick zu behalten. Schaffst du alle Habits eines Tages, bekommt Daruma sein zweites Auge.</p></div>
       <h3 class="section-title">Wie heißt du?</h3>
       <input class="field" id="ob-name" value="${esc(ob.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name" enterkeyhint="next">
       <p class="section-footer">Bleibt nur auf diesem Gerät.</p>
@@ -318,10 +318,10 @@ function renderOnboarding() {
     button = 'Los geht’s';
   } else if (ob.step === 1) {
     body = `<h1 class="large-title">Deine Habits</h1>
-      <p class="ob-lead">Was willst du dir angewöhnen? Wähle ein paar aus, lieber klein anfangen. Im nächsten Schritt legst du Ziel und Häufigkeit fest.</p>
+      <p class="ob-lead">Hier ist eine Vorauswahl beliebter Habits für den Start. Wähle aus, was zu dir passt, lieber erst mal wenige. Im nächsten Schritt legst du Ziel und Häufigkeit fest.</p>
       ${CATALOG.map((c) => `<h3 class="section-title">${esc(c.name)}</h3><div class="card">${c.items.map((t) => `<div class="row"><button class="row-main" data-action="ob-habit" data-name="${esc(t.name)}">
           <span class="emoji">${t.icon}</span><span class="name" style="flex:1">${esc(t.name)}</span>${pick(ob.habits.includes(t.name))}</button></div>`).join('')}</div>`).join('')}
-      <p class="section-footer">Eigene Habits legst du später im Reiter Habits an.</p>`;
+      <p class="section-footer">Nicht dabei, was du suchst? Eigene Habits legst du nach der Einrichtung im Reiter Habits an.</p>`;
     button = ob.habits.length ? `Weiter mit ${ob.habits.length} Habit${ob.habits.length === 1 ? '' : 's'}` : 'Ohne Habits weiter';
   } else if (ob.step === 2) {
     const chosen = CATALOG.flatMap((c) => c.items).filter((t) => ob.habits.includes(t.name));
@@ -343,7 +343,7 @@ function renderOnboarding() {
     const standalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
     body = `<div class="ob-hero ob-done"><div class="daruma done-daruma wobble" data-action="poke">${darumaSVG(true, true)}</div>
       <h1>Alles bereit${ob.name ? `, ${esc(ob.name)}` : ''}!</h1>
-      <p>Schaffst du an einem Tag alle Habits, bekommt Daruma ihr zweites Auge. Gleich zeige ich dir kurz die App.</p></div>
+      <p>Schaffst du an einem Tag alle Habits, bekommt Daruma sein zweites Auge. Gleich zeige ich dir kurz die App.</p></div>
       <p class="ob-note">${standalone ? '' : 'Tipp: In Safari über Teilen → „Zum Home-Bildschirm“ wird Daruma zur App.<br>'}Deine Daten bleiben auf diesem Gerät. Eine Sicherung findest du unter Fortschritt.</p>`;
     button = 'Los geht’s';
   }
