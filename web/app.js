@@ -525,7 +525,7 @@ function renderCheckinStats(today) {
     const w = vals(7);
     return `<div class="stat">${head}<div class="stat-sub">Ja an ${w.filter((v) => v === true).length} von ${w.length} Tagen (letzte 7 Tage)</div></div>`;
   }).join('');
-  return rows ? `<h3 class="section-title">Check-in</h3><div class="card">${rows}</div><p class="section-footer">Die Balken zeigen die letzten 14 Tage.</p>` : '';
+  return rows ? `<h3 class="section-title">Check-in</h3><div class="card">${rows}</div>` : '';
 }
 
 function renderMonthSheet() {
@@ -1250,7 +1250,7 @@ function renderSheet() {
       ${dr.kind === 'count' || dr.kind === 'limit' ? `<h3 class="section-title">Abhaken</h3>
       <div class="card"><div class="segmented">${(dr.kind === 'count' ? [['whole', 'Ganzes Ziel'], ['step', 'In Schritten']] : [['whole', 'Nur abhaken'], ['step', 'Wert eintragen']]).map(([k, l]) => `<button class="${dr.tap === k ? 'on' : ''}" data-action="set-tap" data-tap="${k}">${l}</button>`).join('')}</div></div>` : ''}
       <h3 class="section-title">Wie oft?</h3>
-      <div class="card">${freqPicker(dr, '')}</div>
+      <div class="card freq-card">${freqPicker(dr, '')}</div>
       <h3 class="section-title">Symbol</h3>
       <div class="card"><div class="icon-grid">${(HABIT_ICONS.includes(dr.icon) ? HABIT_ICONS : [dr.icon, ...HABIT_ICONS]).map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${pic(i)}</button>`).join('')}</div></div>
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
