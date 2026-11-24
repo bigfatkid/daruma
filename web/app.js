@@ -35,6 +35,8 @@ const EMOJI_PICTO = {"🦴": "bone", "📈": "activity", "💧": "droplet", "�
 // Gespeichert bleiben die bisherigen Zeichen, angezeigt wird ein einfarbiges Piktogramm.
 Object.assign(PICTO, {
   cloud: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+  'shield-check': '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+  'log-in': '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>',
   'cloud-off': '<path d="m2 2 20 20"/><path d="M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193"/><path d="M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07"/>',
   'refresh-cw': '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
   'log-out': '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
@@ -216,6 +218,7 @@ function normalize(s) {
     lastBackup: dayOk(s.lastBackup) ? s.lastBackup : null,
     firstUse: dayOk(s.firstUse) ? s.firstUse : todayKey(),
     backupSnooze: dayOk(s.backupSnooze) ? s.backupSnooze : null,
+    accountHintSeen: !!s.accountHintSeen, // Erinnerung „Konto sichern“ nur einmal
   };
 }
 let loadProblem = false;
@@ -610,19 +613,16 @@ function renderSettingsSheet() {
     <input class="field" id="settings-name" data-setting="name" value="${esc(state.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name">
     <h3 class="section-title">Konto</h3>
     <div class="card">${Sync.loggedIn() ? `
-      <div class="row"><div class="row-main"><span class="emoji">${pic(Sync.status === 'paused' || Sync.status === 'offline' ? 'cloud-off' : 'cloud')}</span><span class="name-wrap"><span class="name">${esc(Sync.meta.email || 'Angemeldet')}</span><span class="tag" data-sync-status>${esc(syncText())}</span></span></div></div>
-      ${Sync.status === 'relogin' || !Sync.meta.linked ? `<div class="row"><button class="row-main" data-action="open-login"><span class="emoji">${pic('cloud')}</span><span class="name">Neu anmelden</span></button></div>`
+      <div class="row"><div class="row-main"><span class="emoji">${pic(Sync.status === 'paused' || Sync.status === 'offline' ? 'cloud-off' : 'cloud')}</span><span class="name-wrap"><span class="name">${Sync.isGuest() ? 'Gast-Konto' : esc(Sync.meta.email || 'Angemeldet')}</span><span class="tag" data-sync-status>${esc(syncText())}</span></span></div></div>
+      ${Sync.status === 'relogin' || (!Sync.meta.linked && !Sync.isGuest()) ? `<div class="row"><button class="row-main" data-action="open-login"><span class="emoji">${pic('cloud')}</span><span class="name">Neu anmelden</span></button></div>`
       : `<div class="row"><button class="row-main" data-action="sync-now"><span class="emoji">${pic('refresh-cw')}</span><span class="name">Jetzt abgleichen</span></button></div>`}
-      <div class="row"><button class="row-main" data-action="sync-logout"><span class="emoji">${pic('log-out')}</span><span class="name">${ui.confirmLogout ? 'Wirklich abmelden?' : 'Abmelden'}</span></button></div>`
+      ${Sync.isGuest() ? `<div class="row"><button class="row-main" data-action="open-secure"><span class="emoji">${pic('shield-check')}</span><span class="name">Konto sichern</span></button></div>
+      <div class="row"><button class="row-main" data-action="open-login-existing"><span class="emoji">${pic('log-in')}</span><span class="name">Mit anderem Konto anmelden</span></button></div>`
+      : `<div class="row"><button class="row-main" data-action="sync-logout"><span class="emoji">${pic('log-out')}</span><span class="name">${ui.confirmLogout ? 'Wirklich abmelden?' : 'Abmelden'}</span></button></div>`}`
     : `
       <div class="row"><button class="row-main" data-action="open-login"><span class="emoji">${pic('cloud')}</span><span class="name">Anmelden und Daten abgleichen</span></button></div>`}
     </div>
-    <h3 class="section-title">Deine Daten</h3>
-    <div class="card">
-      <div class="row"><button class="row-main" data-action="export"><span class="emoji">${pic('💾')}</span><span class="name">Sicherung herunterladen</span></button></div>
-      <div class="row"><label class="row-main" style="cursor:pointer"><span class="emoji">${pic('📂')}</span><span class="name">Sicherung laden</span><input type="file" accept="application/json,.json" data-action="import" hidden></label></div>
-    </div>
-    <p class="section-footer">${Sync.linked() ? 'Deine Daten liegen auf diesem Gerät und in deinem Konto.' : 'Ohne Konto bleibt alles nur auf diesem Gerät. Löschst du das Icon, sind die Daten weg.'} ${state.lastBackup ? `Zuletzt gesichert am ${fmt(state.lastBackup, { day: 'numeric', month: 'long' })}.` : 'Noch keine Sicherung.'}</p>
+    ${Sync.isGuest() ? '<p class="section-footer">Deine Daten werden automatisch online gesichert. Mit „Konto sichern“ (E-Mail und Passwort) hast du sie auch auf dem Mac oder einem neuen Handy.</p>' : ''}
     <h3 class="section-title">Erinnerung</h3>
     <div class="card"><div class="row"><button class="row-main" data-action="open-reminder"><span class="emoji">${pic('🌙')}</span><span class="name">Tägliche Erinnerung einrichten</span></button></div></div>
     <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="tour-start"><span class="emoji">${pic('🧭')}</span><span class="name">App-Tour noch mal ansehen</span></button></div></div>`;
@@ -768,10 +768,10 @@ function renderOnboarding() {
   if (ob.step === 0) {
     body = `<div class="ob-hero"><div class="daruma big-daruma wobble" data-action="poke">${darumaSVG(false)}</div>
       <h1>Kleine Schritte, jeden Tag.</h1>
-      <p>Daruma hilft dir, Habits, To-Dos und Projekte im Blick zu behalten. Schaffst du alle Habits und To-Dos eines Tages, bekommt Daruma sein zweites Auge.</p></div>
+      <p>Daruma behält für dich den Überblick über Habits, To-Dos und Projekte. Schaffst du alles für heute, öffnet er sein zweites Auge.</p></div>
       <h3 class="section-title">Wie heißt du?</h3>
       <input class="field" id="ob-name" value="${esc(ob.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name" enterkeyhint="next">
-      <p class="ob-restore"><button class="link" data-action="open-login">Schon ein Konto? Anmelden</button><label>Daten wiederherstellen<input type="file" accept="application/json,.json" data-action="import" hidden></label></p>`;
+      <p class="ob-restore"><button class="link" data-action="open-login">Schon ein Konto? Anmelden</button></p>`;
     button = 'Los geht’s';
   } else if (ob.step === 1) {
     body = `<h1 class="large-title">Deine Habits</h1>
@@ -844,7 +844,7 @@ const TOUR = [
   ['today', 'Heute', 'Hier hakst du deine Habits ab und erledigst To-Dos. Neue To-Dos tippst du direkt in die Liste, oben wechselst du zwischen den Tagen.'],
   ['habits', 'Routinen', 'Hier verwaltest du deine Habits und die Fragen für den täglichen Check-in. Oben schaltest du zwischen beiden um.'],
   ['pool', 'Projekte', 'Für größere Vorhaben: Lege Projekte an, sammle Aufgaben mit Unteraufgaben und hol dir bei Lust etwas auf Heute.'],
-  ['progress', 'Fortschritt', 'Serien und Quoten für jedes Habit. Oben rechts beim Zahnrad findest du Einstellungen und deine Sicherung.'],
+  ['progress', 'Fortschritt', 'Serien und Quoten für jedes Habit. Oben rechts beim Zahnrad findest du Einstellungen und dein Konto.'],
 ];
 function renderTour() {
   if (ui.tour === null || ui.sheet) return '';
@@ -930,7 +930,7 @@ function renderToday() {
       </div>
     </div>
 
-    ${renderSyncHint(d, today)}${renderBackupHint(d, today)}
+    ${renderSyncHint(d, today)}${renderAccountHint(d, today)}${renderBackupHint(d, today)}
     ${renderCheckinCard(d, today)}
 
     ${sectionHead('habits', 'Habits', habitsFolded(d, habits), counted.length ? `${counted.filter((h) => isDone(h, d)).length} von ${counted.length} erledigt` : '')}
@@ -1746,6 +1746,7 @@ function exportData() {
   backupDone();
 }
 function backupDue(today) {
+  if (DEMO !== 'backup') return 0; // Sicherungen gibt es nicht mehr: das Konto sichert automatisch (Matti, 24.11.)
   if (Sync.linked() && Sync.status !== 'paused') return 0; // mit Konto ist eine Kopie online
   if (DEMO && DEMO !== 'backup') return 0;
   const since = state.lastBackup || state.firstUse || today;
@@ -2250,7 +2251,7 @@ document.addEventListener('keydown', (ev) => {
   else if (ui.sheet.type === 'list-editor') saveList();
   else if (ui.sheet.type === 'habit-editor') saveHabit();
   else if (ui.sheet.type === 'q-editor') saveQuestion();
-  else if (ui.sheet.type === 'login' && ui.draft.step === 'email') { if (ev.target.id === 'login-email' && !ui.draft.pw) document.getElementById('login-pw').focus(); else { ev.target.blur(); actions['login-go'](); } }
+  else if (ui.sheet.type === 'login' && (ui.draft.step === 'email' || ui.draft.step === 'secure')) { if (ev.target.id === 'login-email' && !ui.draft.pw) document.getElementById('login-pw').focus(); else { ev.target.blur(); actions[ui.draft.step === 'secure' ? 'secure-go' : 'login-go'](); } }
 });
 
 // Neuer Tag, während die App offen ist
@@ -2366,6 +2367,7 @@ function syncText() {
   if (st === 'syncing') return 'Wird abgeglichen …';
   if (st === 'offline') return 'Offline. Wird abgeglichen, sobald du Netz hast.';
   if (st === 'paused') return 'Sync pausiert. Deine Daten sind auf dem Gerät sicher.';
+  if (Sync.isGuest() && !Sync.meta.linked && st !== 'relogin') return 'Wird eingerichtet …';
   if (st === 'relogin' || !Sync.meta.linked) return 'Bitte neu anmelden';
   const t = Sync.meta.lastSync;
   if (!t) return 'Angemeldet';
@@ -2391,6 +2393,14 @@ function renderSyncHint(d, today) {
     <span class="name-wrap"><span class="name">${why === 'relogin' ? 'Bitte neu anmelden' : 'Sync pausiert'}</span><span class="tag">${why === 'relogin' ? 'Deine Daten sind auf dem Gerät sicher.' : 'Deine Daten sind auf dem Gerät sicher.'}</span></span></button>
     ${why === 'paused' ? '<div class="controls"><button class="small-link" data-action="sync-now">Erneut versuchen</button></div>' : ''}</div></div>`;
 }
+// Gast-Konto: nach ein paar Tagen einmal dezent ans Sichern erinnern
+function renderAccountHint(d, today) {
+  const due = DEMO === 'accounthint' || (Sync.isGuest() && Sync.meta.linked && !state.accountHintSeen && Date.now() - (Sync.meta.since || Date.now()) > 5 * 864e5);
+  if (d !== today || !due) return '';
+  return `<div class="card backup-hint"><div class="row"><button class="row-main" data-action="open-secure"><span class="emoji">${pic('shield-check')}</span>
+    <span class="name-wrap"><span class="name">Konto sichern</span><span class="tag">Damit deine Serien nie verloren gehen.</span></span></button>
+    <div class="controls"><button class="small-link" data-action="account-later">Später</button></div></div></div>`;
+}
 function renderLoginSheet() {
   const dr = ui.draft || {};
   const err = dr.error ? `<p class="error">${esc(dr.error)}</p>` : '';
@@ -2406,13 +2416,16 @@ function renderLoginSheet() {
       ${err}
       <div class="stack login-stack"><button class="btn-primary" data-action="login-go"${busy}>${dr.busy ? 'Einen Moment …' : isNew ? 'Konto anlegen' : 'Anmelden'}</button>
       <button class="btn-plain" data-action="login-mode"${busy}>${isNew ? 'Ich habe schon ein Konto' : 'Noch kein Konto? Konto anlegen'}</button></div>`;
-  } else if (dr.step === 'migrate') {
-    const saved = state.lastBackup === todayKey();
-    body = `<p class="pick-lead">Du bist angemeldet. Jetzt kommen deine Daten von diesem Gerät in dein Konto (${state.habits.length} Habits, ${state.todos.length} To-Dos).</p>
-      <div class="card help-steps">
-        <div class="row"><span class="step-no">1</span><span>Zur Sicherheit vorher eine Sicherung speichern. ${saved ? '<b>Erledigt.</b>' : ''}<br><button class="link" data-action="export">Sicherung herunterladen</button></span></div>
-        <div class="row"><span class="step-no">2</span><span>Daten hochladen. Auf dem Gerät bleibt alles, wie es ist.</span></div>
+  } else if (dr.step === 'secure') {
+    body = `<p class="pick-lead">Trag E-Mail und ein Passwort ein. Damit meldest du dich auf dem Mac oder einem neuen Handy an. Deine Daten bleiben, wie sie sind.</p>
+      <div class="card login-card">
+        <input class="field" id="login-email" data-field="email" value="${esc(dr.email || '')}" type="email" inputmode="email" autocomplete="username" autocapitalize="off" placeholder="E-Mail" enterkeyhint="next">
+        <input class="field" id="login-pw" data-field="pw" value="${esc(dr.pw || '')}" type="password" autocomplete="new-password" placeholder="Passwort (mind. 8 Zeichen)" enterkeyhint="go">
       </div>
+      ${err}
+      <div class="stack login-stack"><button class="btn-primary" data-action="secure-go"${busy}>${dr.busy ? 'Einen Moment …' : 'Konto sichern'}</button></div>`;
+  } else if (dr.step === 'migrate') {
+    body = `<p class="pick-lead">Du bist angemeldet. Jetzt kommen deine Daten von diesem Gerät in dein Konto (${state.habits.length} Habits, ${state.todos.length} To-Dos). Auf dem Gerät bleibt alles, wie es ist.</p>
       ${err}
       <div class="stack login-stack"><button class="btn-primary" data-action="login-upload"${busy}>${dr.busy ? 'Einen Moment …' : 'Daten hochladen'}</button></div>`;
   } else if (dr.step === 'choose') {
@@ -2423,15 +2436,16 @@ function renderLoginSheet() {
       <button class="btn-plain" data-action="login-upload"${busy}>Daten von diesem Gerät nehmen</button></div>
       <p class="section-footer">Die Daten, die nicht gelten, werden als Kopie auf diesem Gerät aufgehoben.</p>`;
   }
-  return sheetShell('Anmelden', dr.busy ? '' : cancelBtn, '', body);
+  return sheetShell(dr.step === 'secure' ? 'Konto sichern' : 'Anmelden', dr.busy ? '' : cancelBtn, '', body);
 }
 function loginError(e) {
   if (e && e.net) return 'Keine Verbindung. Bitte später noch mal versuchen.';
   const m = String((e && e.message) || '');
+  if (e && e.pending) return 'Supabase schickt dir noch eine Bestätigungsmail. Öffne den Link darin, dann ist dein Konto gesichert.';
   if (e && e.confirm) return 'Konto angelegt, aber Supabase verlangt noch eine Bestätigung per Mail. „Confirm email“ ausschalten, dann noch mal anmelden.';
   if (e && e.status === 429 || /rate limit/i.test(m)) return 'Zu viele Versuche. Bitte ein paar Minuten warten.';
   if (/invalid login|credentials/i.test(m)) return 'E-Mail oder Passwort stimmt nicht.';
-  if (/already registered|already exists/i.test(m)) return 'Für diese E-Mail gibt es schon ein Konto. Bitte anmelden.';
+  if (/already (been )?registered|already exists/i.test(m)) return 'Für diese E-Mail gibt es schon ein Konto. Bitte anmelden.';
   if (/not confirmed/i.test(m)) return 'Die E-Mail ist noch nicht bestätigt.';
   if (/password/i.test(m)) return 'Das Passwort ist zu kurz oder zu einfach (mind. 8 Zeichen).';
   if (/email/i.test(m)) return 'Bitte prüf die E-Mail-Adresse.';
@@ -2477,6 +2491,15 @@ Object.assign(actions, {
   },
   'login-upload'() { loginStep(async () => { await Sync.link('upload'); loginDone('Deine Daten sind jetzt im Konto'); }); },
   'login-download'() { loginStep(async () => { keepCopy('vorSync'); await Sync.link('download'); loginDone('Daten aus deinem Konto geladen'); }); },
+  'open-secure'() { openSheet({ type: 'login' }, { step: 'secure', email: '' }, '#login-email'); },
+  'open-login-existing'() { openSheet({ type: 'login' }, { step: 'email', email: '', isNew: false }, '#login-email'); },
+  'secure-go'() {
+    const dr = ui.draft, email = (dr.email || '').trim().toLowerCase(), pw = dr.pw || '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { dr.error = 'Bitte gib deine E-Mail-Adresse ein.'; render(); return; }
+    if (pw.length < 8) { dr.error = 'Das Passwort braucht mindestens 8 Zeichen.'; render(); return; }
+    loginStep(async () => { await Sync.secure(email, pw); dr.pw = ''; state.accountHintSeen = true; persist(); loginDone('Konto gesichert'); });
+  },
+  'account-later'() { state.accountHintSeen = true; commit(); },
   'sync-now'() { Sync.meta && (Sync.meta.failSince = null); Sync.run(); },
   'sync-logout'() {
     if (!ui.confirmLogout) { ui.confirmLogout = true; render(); return; }
@@ -2487,6 +2510,18 @@ Object.assign(actions, {
 // Von sync.js gebraucht
 Sync.hooks = {
   getState: () => state,
+  // Gast-Konto im Hintergrund anlegen (nach der Einrichtung) und die Daten hochladen
+  async autoGuest() {
+    const g = Sync.hooks;
+    if (DEMO || !state.setupDone || !navigator.onLine || g.guestBusy || Date.now() - (g.guestLast || 0) < 10 * 60000) return;
+    g.guestBusy = true; g.guestLast = Date.now();
+    try {
+      if (!Sync.loggedIn()) await Sync.guest();
+      await Sync.link(hasLocalData() ? 'upload' : 'later');
+      if (ui.sheet && ui.sheet.type === 'settings' && !Sync.hooks.busy()) render();
+    } catch (e) { console.warn('Gast-Konto', e); }
+    finally { g.guestBusy = false; }
+  },
   adopt(data) {
     const n = normalize(data);
     state = n;
@@ -2512,7 +2547,7 @@ const renderedHint = () => (document.querySelector('.screen [data-action="sync-n
 
 /* ---------- Start ---------- */
 if (DEMO) applyDemoScene(DEMO);
-if (loadProblem) setTimeout(() => toast('Deine Daten konnten nicht gelesen werden. Eine Kopie ist aufgehoben. Am besten jetzt deine letzte Sicherung laden.'), 300);
+if (loadProblem) setTimeout(() => toast('Deine Daten konnten nicht gelesen werden. Eine Kopie ist aufgehoben. Deine Daten im Konto sind davon nicht betroffen.'), 300);
 else if (state.setupDone && !state.tourDone) ui.tour = 0;
 render();
 

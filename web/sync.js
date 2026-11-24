@@ -2,6 +2,10 @@
 
 /* =====================================================================
    Daruma – Sync mit Supabase (Stufe 2)
+   - Beim ersten Start legt die App still ein Gast-Konto an (Supabase
+     „anonymous sign-in“), damit von Anfang an alles online gesichert ist.
+     Mit „Konto sichern“ kommen E-Mail und Passwort dazu, dann geht es
+     auch auf dem Mac oder einem neuen Handy.
    - Anmeldung mit E-Mail und Passwort, ganz ohne Mails (ein Login-Link
      würde auf dem iPhone Safari öffnen statt der App vom Home-Bildschirm,
      und die Mail-Vorlagen sind im Gratis-Plan gesperrt).
@@ -46,6 +50,7 @@ const Sync = {
     try { localStorage.setItem(SYNC_BASE_KEY, JSON.stringify(data)); } catch (e) { /* egal */ }
   },
   loggedIn() { return !!(this.meta && this.meta.userId); },
+  isGuest() { return this.loggedIn() && !!this.meta.anon; },
   linked() { return this.loggedIn() && !!this.meta.linked && !!this.meta.refresh; },
 
   setStatus(s, err = null) {
@@ -99,6 +104,8 @@ const Sync = {
       expiresAt: s.expires_at || Math.floor(Date.now() / 1000) + (s.expires_in || 3600),
       userId: (s.user && s.user.id) || (this.meta && this.meta.userId),
       email: (s.user && s.user.email) || (this.meta && this.meta.email),
+      anon: s.user ? !!s.user.is_anonymous : !!(this.meta && this.meta.anon),
+      since: (this.meta && this.meta.since) || Date.now(),
     };
     this.saveMeta();
   },
@@ -115,6 +122,22 @@ const Sync = {
     this.takeSession(s);
     this.setStatus('ok');
     return sameUser && this.meta.linked;
+  },
+  // Gast-Konto im Hintergrund (braucht „Allow anonymous sign-ins“ in Supabase)
+  async guest() {
+    const s = await this.call('/auth/v1/signup', { method: 'POST', body: {}, auth: false });
+    if (!s || !s.access_token) throw new Error('Kein Gast-Konto');
+    this.meta = null;
+    try { localStorage.removeItem(SYNC_BASE_KEY); } catch (e) { /* egal */ }
+    this.takeSession(s);
+  },
+  // Gast-Konto sichern: E-Mail und Passwort nachtragen. Daten und Konto bleiben dieselben.
+  async secure(email, password) {
+    const u = await this.call('/auth/v1/user', { method: 'PUT', body: { email, password } });
+    if (u && u.new_email && u.email !== email) throw Object.assign(new Error('pending'), { pending: true }); // Bestätigungsmail ist noch an
+    this.meta.email = email; this.meta.anon = false; this.saveMeta();
+    await this.ensureToken(true).catch(() => {});
+    this.meta.anon = false; this.saveMeta();
   },
   async logout() {
     const m = this.meta;
@@ -164,11 +187,12 @@ const Sync = {
 
   /* ---------- Abgleich ---------- */
   changed() {
-    if (this.applying || !this.linked()) return;
+    if (this.applying || !(this.linked() || !this.loggedIn())) return;
     clearTimeout(this.timer);
     this.timer = setTimeout(() => this.run(), 2000);
   },
   async run() {
+    if ((!this.loggedIn() || (this.isGuest() && !this.meta.linked)) && this.hooks.autoGuest) return this.hooks.autoGuest();
     if (!this.linked()) return;
     if (this.running) { this.again = true; return; }
     if (!navigator.onLine) { this.setStatus('offline'); return; }
