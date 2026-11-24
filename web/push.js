@@ -57,8 +57,9 @@ const Push = {
   async plan() {
     if (typeof state === 'undefined' || !Sync.loggedIn()) return;
     const r = state.reminder || {};
-    const settings = r.on
-      ? { on: true, time: r.time, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Berlin', days: reminderPlan() }
+    const perHabit = state.habits.some((h) => h.remind);
+    const settings = r.on || perHabit
+      ? { on: true, evening: !!r.on, time: r.time, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Berlin', days: reminderPlan() }
       : { on: false };
     const sig = JSON.stringify(settings);
     if (sig === this.lastPlan) return;
@@ -71,7 +72,7 @@ const Push = {
 
   // Beim Start: ist die Erinnerung an und erlaubt, Adresse auffrischen (falls das iPhone eine neue vergeben hat)
   async refresh() {
-    if (typeof state === 'undefined' || !state.reminder || !state.reminder.on || !this.supported() || this.permission() !== 'granted' || !Sync.loggedIn()) { this.planSoon(); return; }
+    if (typeof state === 'undefined' || !((state.reminder && state.reminder.on) || state.habits.some((h) => h.remind)) || !this.supported() || this.permission() !== 'granted' || !Sync.loggedIn()) { this.planSoon(); return; }
     try { await this.enable(); } catch (e) { /* später */ }
     this.lastPlan = null;
     this.plan();

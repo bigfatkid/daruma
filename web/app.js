@@ -130,6 +130,7 @@ function cleanHabit(h, i) {
     order: typeof h.order === 'number' ? h.order : i,
     options: Array.isArray(h.options) ? h.options.filter((o) => typeof o === 'string' && o.trim()) : [],
     hist: Array.isArray(h.hist) ? h.hist.filter((e) => isObj(e) && dayOk(e.until)) : [],
+    remind: typeof h.remind === 'string' && /^\d\d:\d\d$/.test(h.remind) ? h.remind : null, // Push-Erinnerung um diese Uhrzeit
   };
 }
 function cleanRepeat(r) {
@@ -983,9 +984,11 @@ function dayProgress(k, today) {
 
 // Was an Tag k noch offen ist (gleiche Regeln wie fürs zweite Auge). Für die Abend-Erinnerung.
 function openOn(k, today) {
+  // Erinnerungen pro Habit: nur, was an dem Tag dran und noch nicht abgehakt ist
+  const r = state.habits.filter((x) => x.remind && (isActive(x, k) || weeklyShows(x, k)) && !isDone(x, k) && !(isWeekly(x) && goalMet(x, k))).map((x) => ({ at: x.remind, n: x.name }));
   const h = state.habits.filter((x) => isActive(x, k) && !isDone(x, k)).sort(byOrder).map((x) => x.name);
   const t = state.todos.filter((x) => todoAppears(x, k, today) && !(k === today && carriedOver(x, today)) && !x.completedAt).sort(byOrder).map((x) => x.title);
-  return { h: h.slice(0, 6), t: t.slice(0, 6), hn: h.length, tn: t.length };
+  return { h: h.slice(0, 6), t: t.slice(0, 6), hn: h.length, tn: t.length, r };
 }
 function reminderPlan() {
   const today = todayKey(), days = {};
@@ -1372,6 +1375,11 @@ function renderSheet() {
       <div class="card"><div class="segmented">${(dr.kind === 'count' ? [['whole', 'Ganzes Ziel'], ['step', 'In Schritten']] : [['whole', 'Nur abhaken'], ['step', 'Wert eintragen']]).map(([k, l]) => `<button class="${dr.tap === k ? 'on' : ''}" data-action="set-tap" data-tap="${k}">${l}</button>`).join('')}</div></div>` : ''}
       <h3 class="section-title">Wie oft?</h3>
       <div class="card freq-card">${freqPicker(dr, '')}</div>
+      <h3 class="section-title">Erinnerung</h3>
+      <div class="card">
+        ${toggleRow('Erinnerung', dr.remindOn, 'data-action="habit-remind-toggle"')}
+        ${dr.remindOn ? `<label class="form-row"><span>Uhrzeit</span><input class="time-field" type="time" step="300" data-field="remindTime" value="${esc(dr.remindTime)}"></label>` : ''}
+      </div>
       <h3 class="section-title">Symbol</h3>
       <div class="card"><div class="icon-grid">${(HABIT_ICONS.includes(dr.icon) ? HABIT_ICONS : [dr.icon, ...HABIT_ICONS]).map((i) => `<button class="${dr.icon === i ? 'on' : ''}" data-action="set-icon" data-icon="${i}">${pic(i)}</button>`).join('')}</div></div>
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
@@ -1550,6 +1558,7 @@ function habitDraft(h, template) {
     catchUp: h ? catchesUp(h) : false,
     tap: src.tap === 'step' ? 'step' : 'whole',
     options: [...(src.options || [])], optOrig: [...(src.options || [])], multi: !!src.multi, minPick: src.minPick || 1,
+    remindOn: !!(h && h.remind), remindTime: (h && h.remind) || '08:00',
   };
 }
 
@@ -1564,7 +1573,8 @@ function saveHabit() {
   if (dr.kind !== 'check' && !(target > 0)) return fail('Bitte gib einen Zielwert größer als 0 ein.');
   if (dr.kind === 'count' && !(step > 0)) return fail('Bitte gib eine Schrittweite größer als 0 ein.');
   if (dr.freq === 'days' && !dr.weekdays.length) return fail('Wähle mindestens einen Wochentag.');
-  const values = { name, icon: dr.icon, kind: dr.kind, target, step, unit: (dr.unit || '').trim(), ...freqValues(dr), catchUp: dr.catchUp, times: 1, tap: dr.kind === 'count' || dr.kind === 'limit' ? dr.tap : 'whole' };
+  const values = { name, icon: dr.icon, kind: dr.kind, target, step, unit: (dr.unit || '').trim(), ...freqValues(dr), catchUp: dr.catchUp, times: 1, tap: dr.kind === 'count' || dr.kind === 'limit' ? dr.tap : 'whole',
+    remind: dr.remindOn && /^\d\d:\d\d/.test(dr.remindTime || '') ? dr.remindTime.slice(0, 5) : null };
   if (dr.kind === 'choice') {
     // Umbenannte Optionen: auch im Verlauf umbenennen, damit „zuletzt“ und die Statistik stimmen
     const ren = {};
@@ -1978,6 +1988,19 @@ const actions = {
   'opt-del'(el) { ui.draft.options.splice(Number(el.dataset.i), 1); ui.draft.optOrig.splice(Number(el.dataset.i), 1); ui.draft.minPick = Math.max(1, Math.min(ui.draft.minPick, ui.draft.options.length)); render(); },
   'set-tap'(el) { ui.draft.tap = el.dataset.tap; render(); },
   'min-pick'(el) { const dr = ui.draft; dr.minPick = Math.max(1, Math.min(Math.max(1, dr.options.length), dr.minPick + Number(el.dataset.dir))); render(); },
+  // Erinnerung pro Habit (Matti, Variante A). Beim ersten Mal fragt das iPhone um Erlaubnis.
+  async 'habit-remind-toggle'() {
+    const dr = ui.draft;
+    if (dr.remindOn) { dr.remindOn = false; render(); return; }
+    dr.error = '';
+    if (typeof Push === 'undefined' || !Push.supported() || !Push.standalone()) { dr.error = 'Erinnerungen gehen nur in der Daruma-App vom Home-Bildschirm.'; render(); return; }
+    if (!Sync.loggedIn()) { dr.error = 'Dafür braucht Daruma ein Konto (auch Gast-Konto).'; render(); return; }
+    dr.remindOn = true; render();
+    try { await Push.enable(); } catch (e) {
+      ui.draft && (ui.draft.remindOn = false, ui.draft.error = e.code === 'denied' ? 'Mitteilungen sind für Daruma aus. Einschalten: iPhone-Einstellungen → Mitteilungen → Daruma.' : `Hat nicht geklappt: ${e.message || e}`);
+      render();
+    }
+  },
   'draft-toggle'(el) { ui.draft[el.dataset.key] = !ui.draft[el.dataset.key]; render(); },
   'set-icon'(el) { ui.draft.icon = el.dataset.icon; render(); },
   'save-habit'() { saveHabit(); },
