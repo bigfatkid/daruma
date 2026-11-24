@@ -6,6 +6,8 @@
 // Aufrufe (POST, JSON):
 //   { action: "key" }   -> öffentlicher Schlüssel für die App (wird beim ersten Mal erzeugt)
 //   { action: "test" }  -> schickt eine Testnachricht an alle Geräte der angemeldeten Person
+//   { action: "tick" }  -> (alle 5 Minuten per pg_cron) schickt fällige Abend-Erinnerungen.
+//                          Nur wenn an dem Tag noch etwas offen ist, höchstens einmal pro Tag und Gerät.
 
 const SB_URL = Deno.env.get('SUPABASE_URL');
 const SB_SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -134,11 +136,61 @@ async function sendPush(sub, message, ttl = 6 * 3600) {
   return { status: res.status, info: text.slice(0, 200) };
 }
 
+/* ---------- Abend-Erinnerung ---------- */
+const list = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} und ${xs[xs.length - 1]}`);
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+// Texte „ermutigend“ (Matti, 24.11.), gestaffelt nach Anzahl
+function reminderText(day) {
+  const h = day.h || [], t = day.t || [];
+  const hn = day.hn ?? h.length, tn = day.tn ?? t.length, n = hn + tn;
+  if (n === 1) return { title: 'Ein Schritt fehlt noch', body: `${h[0] || t[0]}, dann ist der Tag komplett.` };
+  if (n <= 3) {
+    const parts = hn ? [...h.slice(0, hn), ...(tn ? [plural(tn, 'To-Do', 'To-Dos')] : [])] : t.slice(0, tn);
+    return { title: 'Fast geschafft', body: `Nur noch ${list(parts)}. Kleine Schritte, jeden Tag.` };
+  }
+  const counts = list([hn ? plural(hn, 'Habit', 'Habits') : '', tn ? plural(tn, 'To-Do', 'To-Dos') : ''].filter(Boolean));
+  const names = [...h, ...t].slice(0, 3);
+  return { title: 'Noch ist Zeit', body: `${counts} offen: ${names.join(', ')} und ${n - names.length} weitere. Fang einfach mit einem an.` };
+}
+
+function localNow(tz) {
+  let parts;
+  try { parts = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()); }
+  catch (e) { return localNow('Europe/Berlin'); }
+  const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
+  return { date: `${p.year}-${p.month}-${p.day}`, minutes: Number(p.hour) * 60 + Number(p.minute) };
+}
+
+async function tick() {
+  const subs = await db('push_subs?select=endpoint,keys,settings,last_sent&settings->>on=eq.true');
+  let sent = 0;
+  for (const s of subs) {
+    const st = s.settings || {};
+    const now = localNow(st.tz || 'Europe/Berlin');
+    if (s.last_sent === now.date) continue;
+    const [hh, mm] = String(st.time || '19:00').split(':').map(Number);
+    const late = now.minutes - (hh * 60 + mm);
+    if (late < 0 || late > 180) continue; // noch nicht Zeit, oder schon zu spät (z. B. Server war aus)
+    const day = st.days && st.days[now.date];
+    const open = day ? (day.hn ?? (day.h || []).length) + (day.tn ?? (day.t || []).length) : 0;
+    if (open > 0) {
+      const r = await sendPush(s, { ...reminderText(day), tag: 'abend' }, 3 * 3600);
+      if (r.status >= 200 && r.status < 300) sent++;
+      if (r.status === 404 || r.status === 410) continue;
+    }
+    await db(`push_subs?endpoint=eq.${encodeURIComponent(s.endpoint)}`, { method: 'PATCH', body: { last_sent: now.date }, prefer: 'return=minimal' });
+  }
+  return { checked: subs.length, sent };
+}
+
 /* ---------- Aufrufe ---------- */
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   try {
     const { action } = await req.json().catch(() => ({}));
+    // Der Zeitplan (pg_cron) braucht kein Konto: er verschickt nur, was ohnehin fällig ist
+    if (action === 'tick') return json(await tick());
     const user = await userFrom(req);
     if (!user) return json({ error: 'Nicht angemeldet' }, 401);
 

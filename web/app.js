@@ -40,6 +40,7 @@ Object.assign(PICTO, {
   'cloud-off': '<path d="m2 2 20 20"/><path d="M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193"/><path d="M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07"/>',
   'refresh-cw': '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
   bell: '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
   'log-out': '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
 });
 function pic(icon) {
@@ -105,7 +106,7 @@ const rollsOver = () => true;
 function freshState() {
   return { version: 1, name: '', setupDone: false, catchUpV2: true, habits: [], logs: {}, todos: [], lists: [], ...moduleDefaults() };
 }
-const moduleDefaults = () => ({ stepV2: true, checkinV2: true, checkinQuestions: [], checkins: {}, picks: {} });
+const moduleDefaults = () => ({ stepV2: true, checkinV2: true, checkinQuestions: [], checkins: {}, picks: {}, reminder: { on: false, time: '19:00' } });
 // Sicherungen und alte Daten prüfen: fehlende Felder ergänzen, Unbrauchbares aussortieren
 const idOk = (x) => typeof x === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(x);
 const dayOk = (x) => typeof x === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x);
@@ -220,6 +221,8 @@ function normalize(s) {
     firstUse: dayOk(s.firstUse) ? s.firstUse : todayKey(),
     backupSnooze: dayOk(s.backupSnooze) ? s.backupSnooze : null,
     accountHintSeen: !!s.accountHintSeen, // Erinnerung „Konto sichern“ nur einmal
+    // Abend-Erinnerung per Push (Stufe 2b, Matti: Variante A, 19 Uhr)
+    reminder: { on: !!(s.reminder && s.reminder.on), time: s.reminder && /^\d\d:\d\d$/.test(s.reminder.time) ? s.reminder.time : '19:00' },
   };
 }
 let loadProblem = false;
@@ -249,6 +252,7 @@ function persist(s = state) {
     showSaveError(true);
   }
   if (syncReady) Sync.changed(); // Konto: kurz danach abgleichen
+  if (syncReady && typeof Push !== 'undefined') Push.planSoon(); // Erinnerung: was ist offen
 }
 // Hinweis oben, solange Speichern nicht klappt (liegt außerhalb von #app, damit ihn kein Neuzeichnen löscht)
 function showSaveError(on) {
@@ -625,8 +629,10 @@ function renderSettingsSheet() {
     </div>
     ${Sync.isGuest() ? '<p class="section-footer">Deine Daten werden automatisch online gesichert. Mit „Konto sichern“ (E-Mail und Passwort) hast du sie auch auf dem Mac oder einem neuen Handy.</p>' : ''}
     <h3 class="section-title">Erinnerung</h3>
-    <div class="card"><div class="row"><button class="row-main" data-action="open-push-test"><span class="emoji">${pic('bell')}</span><span class="name">Mitteilungen testen</span></button></div>
-      <div class="row"><button class="row-main" data-action="open-reminder"><span class="emoji">${pic('🌙')}</span><span class="name">Tägliche Erinnerung einrichten</span></button></div></div>
+    <div class="card"><div class="row"><button class="row-main" data-action="reminder-toggle" role="switch" aria-checked="${state.reminder.on}"><span class="emoji">${pic('bell')}</span><span class="name">Abend-Erinnerung</span><span class="switch ${state.reminder.on ? 'on' : ''}" style="margin-left:auto"><i></i></span></button></div>
+      ${state.reminder.on ? `<div class="row"><div class="row-main"><span class="emoji">${pic('clock')}</span><span class="name">Uhrzeit</span></div>
+        <div class="controls"><input class="time-field" type="time" step="900" data-setting="reminder-time" value="${state.reminder.time}"></div></div>` : ''}</div>
+    <p class="section-footer">${esc(ui.pushMsg || 'Nur wenn an dem Tag noch etwas offen ist.')}</p>
     <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="tour-start"><span class="emoji">${pic('🧭')}</span><span class="name">App-Tour noch mal ansehen</span></button></div></div>`;
   return sheetShell('Einstellungen', '', '<button class="link" style="font-weight:600" data-action="close-sheet">Fertig</button>', body);
 }
@@ -973,6 +979,18 @@ function dayProgress(k, today) {
   const n = active.length + dayTodos.length;
   const done = active.filter((h) => isDone(h, k)).length + dayTodos.filter((t) => t.completedAt).length;
   return n ? done / n : 0;
+}
+
+// Was an Tag k noch offen ist (gleiche Regeln wie fürs zweite Auge). Für die Abend-Erinnerung.
+function openOn(k, today) {
+  const h = state.habits.filter((x) => isActive(x, k) && !isDone(x, k)).sort(byOrder).map((x) => x.name);
+  const t = state.todos.filter((x) => todoAppears(x, k, today) && !(k === today && carriedOver(x, today)) && !x.completedAt).sort(byOrder).map((x) => x.title);
+  return { h: h.slice(0, 6), t: t.slice(0, 6), hn: h.length, tn: t.length };
+}
+function reminderPlan() {
+  const today = todayKey(), days = {};
+  for (let i = 0; i < 8; i++) { const k = addDays(today, i); days[k] = openOn(k, today); }
+  return days;
 }
 
 function renderWeek(today) {
@@ -2070,6 +2088,26 @@ const actions = {
   'backup-later'() { state.backupSnooze = addDays(todayKey(), 3); commit(); },
   'import-confirm'() { confirmImport(); },
   'open-reminder'() { openSheet({ type: 'reminder-help' }); },
+  // Abend-Erinnerung an/aus. Beim Einschalten fragt das iPhone um Erlaubnis (muss direkt im Tipp passieren).
+  async 'reminder-toggle'() {
+    if (ui.pushBusy) return;
+    if (state.reminder.on) { state.reminder.on = false; ui.pushMsg = ''; commit(); Push.plan(); return; }
+    ui.pushBusy = true; ui.pushMsg = 'Wird eingeschaltet …'; render();
+    try {
+      if (!Push.supported() || !Push.standalone()) throw Object.assign(new Error(''), { code: 'unsupported' });
+      if (!Sync.loggedIn()) throw Object.assign(new Error(''), { code: 'login' });
+      await Push.enable();
+      state.reminder.on = true; ui.pushMsg = '';
+      persist();
+      await Push.plan();
+    } catch (e) {
+      ui.pushMsg = e.code === 'unsupported' ? 'Das geht nur in der Daruma-App vom Home-Bildschirm.'
+        : e.code === 'denied' ? 'Mitteilungen sind für Daruma aus. Einschalten: iPhone-Einstellungen → Mitteilungen → Daruma.'
+        : e.code === 'login' ? 'Dafür braucht Daruma ein Konto (auch Gast-Konto).'
+        : `Hat nicht geklappt: ${e.message || e}`;
+    }
+    ui.pushBusy = false; render();
+  },
   'open-push-test'() { ui.push = null; openSheet({ type: 'push-test' }); if (typeof Push !== 'undefined') Push.prefetchKey(); },
   // Test für Push-Mitteilungen (Stufe 2b): Erlaubnis holen, Gerät eintragen, Testnachricht schicken
   async 'push-test'() {
@@ -2231,6 +2269,7 @@ document.addEventListener('input', (ev) => {
   if (el.dataset && el.dataset.opt !== undefined && ui.draft && ui.draft.options) ui.draft.options[Number(el.dataset.opt)] = el.value;
   if (el.dataset && el.dataset.obTarget) ui.ob.cfg[el.dataset.obTarget].target = el.value;
   if (el.dataset && el.dataset.setting === 'name') { state.name = el.value.trim(); persist(); }
+  if (el.dataset && el.dataset.setting === 'reminder-time' && /^\d\d:\d\d/.test(el.value)) { state.reminder.time = el.value.slice(0, 5); persist(); }
   if (el.dataset && (el.dataset.checkinNote || el.dataset.checkinRange)) {
     const dr = checkinDraft(ui.day);
     if (el.dataset.checkinNote) dr.values[el.dataset.checkinNote] = el.value.trim() ? el.value : undefined;
@@ -2558,6 +2597,7 @@ Object.assign(actions, {
     ui.confirmLogout = 'busy'; render();
     if (!force && !(await Sync.flush())) { ui.confirmLogout = 'unsynced'; render(); return; }
     ui.confirmLogout = false;
+    if (typeof Push !== 'undefined') await Push.forget(); // Erinnerungen an dieses Gerät beenden
     await Sync.logout();
     try { Object.keys(localStorage).filter((k) => k.startsWith('daruma.')).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* egal */ }
     state = freshState();
@@ -2616,7 +2656,8 @@ render();
 if (!DEMO) {
   syncReady = true;
   Sync.run();
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') Sync.run(); });
+  if (typeof Push !== 'undefined') setTimeout(() => Push.refresh(), 4000); // Erinnerung: Adresse + Plan auffrischen
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { Sync.run(); if (typeof Push !== 'undefined') Push.planSoon(); } });
   window.addEventListener('online', () => Sync.run());
   window.addEventListener('offline', () => { if (Sync.linked()) Sync.setStatus('offline'); });
   setInterval(() => { if (document.visibilityState === 'visible') Sync.run(); }, 60000);
