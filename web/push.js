@@ -9,6 +9,7 @@
    ===================================================================== */
 
 const PUSH_KEY_CACHE = 'daruma.pushKey';
+const PUSH_ENDPOINT = 'daruma.pushEndpoint'; // Adresse dieses Geräts (zum Abmelden)
 
 const Push = {
   supported() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; },
@@ -40,6 +41,7 @@ const Push = {
     }
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
     const j = sub.toJSON();
+    try { localStorage.setItem(PUSH_ENDPOINT, j.endpoint); } catch (e) { /* egal */ }
     await Sync.call('/rest/v1/push_subs?on_conflict=endpoint', {
       method: 'POST',
       body: { endpoint: j.endpoint, keys: j.keys, user_id: Sync.meta.userId, updated_at: new Date().toISOString() },
@@ -49,4 +51,37 @@ const Push = {
   },
 
   async test() { return this.fn('test'); },
+
+  // Abend-Erinnerung: Einstellung + was an den nächsten Tagen offen ist, an alle Geräte des Kontos.
+  // Der Server schaut alle paar Minuten, ob es Zeit ist, und nimmt dann den Eintrag für heute.
+  async plan() {
+    if (typeof state === 'undefined' || !Sync.loggedIn()) return;
+    const r = state.reminder || {};
+    const settings = r.on
+      ? { on: true, time: r.time, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Berlin', days: reminderPlan() }
+      : { on: false };
+    const sig = JSON.stringify(settings);
+    if (sig === this.lastPlan) return;
+    try {
+      await Sync.call(`/rest/v1/push_subs?user_id=eq.${Sync.meta.userId}`, { method: 'PATCH', body: { settings, updated_at: new Date().toISOString() }, prefer: 'return=minimal' });
+      this.lastPlan = sig;
+    } catch (e) { /* nächstes Mal */ }
+  },
+  planSoon() { clearTimeout(this.planTimer); this.planTimer = setTimeout(() => this.plan(), 3000); },
+
+  // Beim Start: ist die Erinnerung an und erlaubt, Adresse auffrischen (falls das iPhone eine neue vergeben hat)
+  async refresh() {
+    if (typeof state === 'undefined' || !state.reminder || !state.reminder.on || !this.supported() || this.permission() !== 'granted' || !Sync.loggedIn()) { this.planSoon(); return; }
+    try { await this.enable(); } catch (e) { /* später */ }
+    this.lastPlan = null;
+    this.plan();
+  },
+
+  // Abmelden: dieses Gerät bekommt keine Erinnerungen mehr für das alte Konto
+  async forget() {
+    let ep = '';
+    try { ep = localStorage.getItem(PUSH_ENDPOINT) || ''; } catch (e) { /* egal */ }
+    if (!ep || !Sync.loggedIn()) return;
+    try { await Sync.call(`/rest/v1/push_subs?endpoint=eq.${encodeURIComponent(ep)}`, { method: 'DELETE', prefer: 'return=minimal' }); } catch (e) { /* egal */ }
+  },
 };
