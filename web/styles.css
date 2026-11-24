@@ -732,3 +732,8 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 
 /* Schritt zurück per Wischen (Ziel-Habits in Schritten) */
 .swipe-minus { background: var(--secondary); font-weight: 700; font-size: 15px; }
+
+/* Langes Drücken zum Sortieren: kein Text-Markieren, kein iOS-Menü */
+.swipe:has(.drag-mark) { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.swipe.dragging { transform-origin: center; }
+.swipe.dragging .swipe-row { background: var(--card); }

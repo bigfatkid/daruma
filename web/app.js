@@ -456,7 +456,8 @@ function ciFolded(d) {
 }
 
 // Griff zum Sortieren per Ziehen
-const dragHandle = (kind) => `<span class="drag-handle" data-drag="${kind}" aria-label="Zum Sortieren ziehen" role="button"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>`;
+// Unsichtbare Markierung: Zeile lässt sich per langem Drücken verschieben (Matti: kein Griff)
+const dragHandle = (kind) => `<span class="drag-mark" data-drag="${kind}" hidden></span>`;
 
 // Zeile, die sich nach links wischen lässt und dann einen Mülleimer zeigt
 function swipeRow(kind, id, inner) {
@@ -1952,11 +1953,11 @@ function closeOpenSwipe() {
   if (openSwipe && openSwipe.isConnected) setSwipeX(openSwipe, 0, true);
   openSwipe = null;
 }
-// Sortieren per Ziehen am Griff (Routinen)
+// Sortieren: Zeile lange drücken, dann ziehen (To-Dos auf Heute, Habits und Fragen in Routinen)
 let drag = null;
 function dragStart(handle, y) {
   const item = handle.closest('.swipe');
-  const items = [...item.parentElement.querySelectorAll(':scope > .swipe')].filter((el) => el.querySelector('.drag-handle'));
+  const items = [...item.parentElement.querySelectorAll(':scope > .swipe')].filter((el) => el.querySelector('.drag-mark'));
   drag = { kind: handle.dataset.drag, item, items, from: items.indexOf(item), to: items.indexOf(item), y0: y, h: item.offsetHeight };
   item.classList.add('dragging');
 }
@@ -1984,13 +1985,26 @@ function dragEnd() {
   else state.checkinQuestions.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
   commit();
 }
+let press = null;
+const cancelPress = () => { if (press) { clearTimeout(press.timer); press = null; } };
 document.addEventListener('touchstart', (ev) => {
-  const hd = ev.target.closest('.drag-handle');
-  if (!hd || ev.touches.length !== 1) return;
-  ev.preventDefault();
-  dragStart(hd, ev.touches[0].clientY);
+  cancelPress();
+  const item = ev.target.closest('.swipe');
+  const mk = item && item.querySelector('.drag-mark');
+  if (!mk || ev.touches.length !== 1 || (openSwipe && openSwipe.isConnected)) return;
+  const t = ev.touches[0];
+  press = { x: t.clientX, y: t.clientY, timer: setTimeout(() => {
+    const y = press.y; press = null; swipe = null;
+    if (navigator.vibrate) navigator.vibrate(10);
+    dragStart(mk, y);
+  }, 420) };
+}, { passive: true });
+document.addEventListener('touchmove', (ev) => {
+  if (press) { const t = ev.touches[0]; if (Math.abs(t.clientX - press.x) > 8 || Math.abs(t.clientY - press.y) > 8) cancelPress(); else press.y = t.clientY; }
+  if (drag) { ev.preventDefault(); dragMove(ev.touches[0].clientY); }
 }, { passive: false });
-document.addEventListener('touchmove', (ev) => { if (drag) { ev.preventDefault(); dragMove(ev.touches[0].clientY); } }, { passive: false });
+document.addEventListener('touchend', cancelPress);
+document.addEventListener('contextmenu', (ev) => { if (drag || ev.target.closest('.swipe')) ev.preventDefault(); });
 document.addEventListener('touchend', () => { if (drag) dragEnd(); });
 document.addEventListener('touchcancel', () => { if (drag) { drag = null; render(); } });
 
@@ -2007,7 +2021,6 @@ document.addEventListener('touchend', (ev) => {
 });
 document.addEventListener('touchstart', (ev) => {
   const row = ev.target.closest('.swipe-row');
-  if (ev.target.closest('.drag-handle')) { swipe = null; return; }
   if (openSwipe && !openSwipe.isConnected) openSwipe = null;
   if (openSwipe && row !== openSwipe && !ev.target.closest('.swipe-del')) { closeOpenSwipe(); swallowClick = true; swipe = null; return; }
   if (!row || ev.touches.length !== 1) { swipe = null; return; }
