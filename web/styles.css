@@ -773,3 +773,8 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .login-stack { margin-top: 18px; }
 .ob-restore { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .ob-restore .link { font-size: 15px; padding: 8px; }
+
+/* Start: Konto anlegen / Als Gast / Anmelden (v85) */
+.ob-start { max-width: 528px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+.btn-outline { width: 100%; padding: 13px 20px; border-radius: 12px; font-size: 17px; font-weight: 600; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); background: transparent; }
+.ob-start .link { padding: 6px; font-size: 15px; }
