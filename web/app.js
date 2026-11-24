@@ -229,14 +229,25 @@ function load() {
   if (!loadProblem) persist(s);
   return s;
 }
-let persistWarned = false;
+let saveFailed = false; // bleibt sichtbar, bis wieder gespeichert werden kann (Review Technik)
 function persist(s = state) {
   if (DEMO) return;
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); if (saveFailed) showSaveError(false); }
   catch (e) {
     console.warn('Speichern fehlgeschlagen', e);
-    if (!persistWarned) { persistWarned = true; setTimeout(() => toast('Speichern hat nicht geklappt. Bitte lade eine Sicherung herunter (Fortschritt → Zahnrad).'), 0); }
+    showSaveError(true);
   }
+}
+// Hinweis oben, solange Speichern nicht klappt (liegt außerhalb von #app, damit ihn kein Neuzeichnen löscht)
+function showSaveError(on) {
+  saveFailed = on;
+  let el = document.getElementById('save-error');
+  if (!on) { if (el) el.remove(); return; }
+  if (el) return;
+  el = document.createElement('div'); el.id = 'save-error'; el.className = 'save-error'; el.setAttribute('role', 'alert');
+  el.innerHTML = 'Speichern klappt gerade nicht. Deine letzten Änderungen gehen sonst verloren. <button class="link">Sicherung herunterladen</button>';
+  el.querySelector('button').addEventListener('click', () => actions.export());
+  document.body.appendChild(el);
 }
 
 let state = load();
@@ -274,6 +285,42 @@ function setValue(h, d, v) {
   if (v <= 0 && h.kind !== 'limit') delete state.logs[k];
   else state.logs[k] = Math.round(v * 100) / 100;
 }
+// Meilensteine (Matti, Variante A): beim 10./30./100. Mal kurz ein Siegel in der Zeile
+const MILESTONES = [10, 30, 100];
+function doneCount(h) {
+  const days = new Set();
+  for (const src of [state.logs, state.picks || {}]) for (const k of Object.keys(src)) { const [id, day] = k.split('|'); if (id === h.id) days.add(day); }
+  let n = 0;
+  days.forEach((day) => { if (isDone(h, day)) n++; });
+  return n;
+}
+function checkMilestone(h, d, wasDone) {
+  if (!h || h.kind === 'limit' || wasDone || !isDone(h, d)) return;
+  const n = doneCount(h), key = `${h.id}|${n}`;
+  if (!MILESTONES.includes(n) || ui.msShown[key]) return;
+  ui.msShown[key] = true;
+  ui.milestone = { id: h.id, n, day: d };
+  haptic();
+  clearTimeout(ui.msTimer);
+  ui.msTimer = setTimeout(() => { ui.milestone = null; render(); }, 2800);
+}
+// Kurze Vibration. iPhone-Safari kennt navigator.vibrate nicht: dort löst ein verstecktes Schalter-Feld das Haptik-Feedback aus (iOS 18)
+function haptic() {
+  if (navigator.vibrate) { navigator.vibrate(30); return; }
+  try {
+    let l = document.getElementById('haptic-label');
+    if (!l) {
+      l = document.createElement('label'); l.id = 'haptic-label'; l.style.cssText = 'position:fixed;left:-99px;top:0;width:1px;height:1px;overflow:hidden;opacity:0';
+      l.innerHTML = '<input type="checkbox" switch>'; document.body.appendChild(l);
+    }
+    l.click();
+  } catch (e) { /* egal */ }
+}
+function sealSVG(n) {
+  const gold = n >= 100, rim = n >= 30 ? '#f2bd40' : '#fffaf2';
+  return `<svg class="ms-seal" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" fill="${gold ? '#f2bd40' : 'var(--accent)'}"/><circle cx="24" cy="24" r="19.5" fill="none" stroke="${gold ? 'var(--accent)' : rim}" stroke-width="${n >= 30 ? 2.2 : 1.2}"/><text x="24" y="29.5" text-anchor="middle" font-family="Georgia,serif" font-weight="700" font-size="${n >= 100 ? 15 : 18}" fill="${gold ? 'var(--accent)' : '#fffaf2'}">${n}<tspan font-size="10" dx="1">×</tspan></text></svg>`;
+}
+
 function deleteHabit(id) {
   state.habits = state.habits.filter((h) => h.id !== id);
   for (const k of Object.keys(state.logs)) if (k.startsWith(id + '|')) delete state.logs[k];
@@ -323,7 +370,7 @@ function weekStreak(h) {
   let w = weekStart(today);
   if (weekCount(h, w) < h.perWeek) w = addDays(w, -7); // laufende Woche zählt erst, wenn geschafft
   let n = 0;
-  for (let i = 0; i < 500 && addDays(w, 6) >= h.createdAt; i++, w = addDays(w, -7)) {
+  for (; addDays(w, 6) >= h.createdAt; w = addDays(w, -7)) { // keine Obergrenze: auch lange Serien zählen richtig
     if (weekCount(h, w) >= h.perWeek) n++; else break;
   }
   return n;
@@ -335,7 +382,7 @@ function streak(h) {
   if (isActive(h, d) && !isDone(h, d)) d = addDays(d, -1);
   // Puffer: ein einzelner verpasster Tag bricht die Serie nicht, erst zwei hintereinander (Review Habit-Coach)
   let n = 0, missed = false;
-  for (let i = 0; i < 3000 && d >= h.createdAt; i++, d = addDays(d, -1)) {
+  for (; d >= h.createdAt; d = addDays(d, -1)) { // keine Obergrenze (Review: Serien > 400 Tage)
     if (!isActive(h, d)) continue;
     if (isDone(h, d)) { n++; missed = false; } else if (missed || n === 0) break; else missed = true;
   }
@@ -444,6 +491,7 @@ function habitsFolded(d, habits) {
   // Sind alle Habits des Tages abgehakt, klappt der Bereich von selbst zu.
   const o = (ui.habFold || {})[d];
   if (o !== undefined) return o;
+  if (ui.milestone && ui.milestone.day === d) return false; // Meilenstein erst zeigen, dann zuklappen
   const open = habits.filter((h) => !goalMet(h, d));
   return isFolded('habits') || (open.length > 0 && open.every((h) => isDone(h, d)));
 }
@@ -574,6 +622,7 @@ const ui = {
   focus: null,     // CSS-Selektor, der nach dem Rendern Fokus bekommt
   toast: null,
   wobble: false,
+  milestone: null, msShown: {},
   lastAllDone: {},
   ob: { step: 0, name: '', habits: [], cfg: {}, questions: [] }, // Einrichtung
   tour: null, // App-Tour: Index der Station
@@ -629,6 +678,30 @@ function darumaSVG(bothEyes, popEye) {
   </svg>`;
 }
 
+// Zweites Auge (Matti, Variante B ohne Stempel): Daruma kommt kurz groß nach vorn, Auge ploppt auf, er wackelt, dann zurück
+function eyeMoment() {
+  const el = app.querySelector('.hero-card .daruma');
+  if (!el || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) || !el.animate) return;
+  const r = el.getBoundingClientRect();
+  if (!r.width) return;
+  const dim = document.createElement('div'); dim.className = 'eye-dim';
+  const cl = document.createElement('div'); cl.className = 'daruma eye-clone';
+  cl.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px`;
+  cl.innerHTML = darumaSVG(true, false);
+  document.body.append(dim, cl);
+  el.style.visibility = 'hidden';
+  const S = Math.min(3.2, (innerWidth * 0.5) / r.width);
+  const tx = innerWidth / 2 - (r.left + r.width / 2), ty = innerHeight * 0.42 - (r.top + r.height / 2);
+  const big = `translate(${tx}px, ${ty}px) scale(${S})`, T = 2900;
+  cl.animate([{ transform: 'none' }, { transform: big, offset: 0.14 }, { transform: big, offset: 0.84 }, { transform: 'none' }], { duration: T, easing: 'cubic-bezier(.4,0,.2,1)' });
+  dim.animate([{ opacity: 0 }, { opacity: 1, offset: 0.12 }, { opacity: 1, offset: 0.88 }, { opacity: 0 }], { duration: T, fill: 'forwards' });
+  const pupil = cl.querySelector('.pupil2');
+  if (pupil) { pupil.style.transformOrigin = '63px 39px'; pupil.style.transformBox = 'view-box'; pupil.animate([{ transform: 'scale(0)' }, { transform: 'scale(1)' }], { duration: 550, delay: 600, easing: 'cubic-bezier(.3,1.6,.5,1)', fill: 'backwards' }); }
+  const fig = cl.querySelector('.figure');
+  if (fig) fig.animate([{ transform: 'rotate(0)' }, { transform: 'rotate(-9deg)', offset: 0.15 }, { transform: 'rotate(7deg)', offset: 0.35 }, { transform: 'rotate(-4deg)', offset: 0.55 }, { transform: 'rotate(2deg)', offset: 0.75 }, { transform: 'rotate(0)' }], { duration: 950, delay: 650, easing: 'ease-in-out' });
+  setTimeout(() => { dim.remove(); cl.remove(); el.style.visibility = ''; }, T);
+}
+
 function weekRing(progress, selected, future) {
   const r = 6.6, c = 2 * Math.PI * r;
   const track = selected ? 'rgba(255,255,255,.35)' : 'var(--secondary)';
@@ -657,6 +730,7 @@ function render() {
   const screen = ui.tab === 'today' ? renderToday() : ui.tab === 'habits' ? renderHabits() : ui.tab === 'pool' ? renderPool() : renderProgress();
   app.innerHTML = `<main class="screen">${screen}</main>${renderTabbar()}${renderSheet()}${renderTour()}${ui.toast ? `<div class="toast${ui.undo ? ' with-undo' : ''}">${esc(ui.toast)}${ui.undo ? '<button class="toast-undo" data-action="undo">Rückgängig</button>' : ''}</div>` : ''}`;
   ui.wobble = false;
+  if (ui.eyeMoment) { ui.eyeMoment = false; eyeMoment(); }
   if (keepScroll) { const b = app.querySelector('.sheet-body'); if (b) b.scrollTop = keepScroll; }
   if (ui.focus) {
     const el = app.querySelector(ui.focus);
@@ -690,19 +764,21 @@ function renderOnboarding() {
     button = ob.habits.length ? `Weiter mit ${ob.habits.length} Habit${ob.habits.length === 1 ? '' : 's'}` : 'Ohne Habits weiter';
   } else if (ob.step === 2) {
     const chosen = CATALOG.flatMap((c) => c.items).filter((t) => ob.habits.includes(t.name));
+    // Zugeklappt mit Kurzfassung, Antippen klappt auf (Matti, Variante A)
     body = `<h1 class="large-title">Feinschliff</h1>
-      <p class="ob-lead">Die Vorschläge kannst du so lassen oder an dich anpassen.</p>
-      ${chosen.map((t) => {
-        const f = ob.cfg[t.name], attr = `data-name="${esc(t.name)}"`;
-        return `<div class="card ob-cfg">
-          <div class="ob-cfg-head"><span class="emoji">${pic(t.icon)}</span><strong>${esc(t.name)}</strong><span class="value">${t.kind === 'check' || f.noGoal ? 'Ja/Nein' : ''}</span></div>
+      <p class="ob-lead">Unsere Vorschläge. Tippe einen Habit an, um ihn anzupassen.</p>
+      <div class="card ob-fold-list">${chosen.map((t) => {
+        const f = ob.cfg[t.name], attr = `data-name="${esc(t.name)}"`, open = ob.open === t.name;
+        const head = `<button class="ob-fold-row" data-action="ob-open" data-name="${esc(t.name)}" aria-expanded="${open}"><span class="emoji">${pic(t.icon)}</span><strong>${esc(t.name)}</strong><span class="ob-sum">${esc(obSummary(t, f))}</span><svg class="ob-chev ${open ? 'open' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg></button>`;
+        if (!open) return head;
+        return `${head}<div class="ob-cfg ob-cfg-open">
           ${t.kind === 'count' && !t.fixedGoal ? toggleRow('Mit Ziel', !f.noGoal, `data-action="ob-toggle" data-name="${esc(t.name)}" data-key="noGoal"`) : ''}
           ${t.kind !== 'check' && !f.noGoal ? `<label class="form-row ob-goal"><span>${t.kind === 'limit' ? 'Höchstens pro Tag' : f.freq === 'week' ? 'Ziel pro Mal' : 'Ziel pro Tag'}</span>
             <span class="tune-input"><input data-ob-target="${esc(t.name)}" inputmode="decimal" value="${esc(f.target)}"> ${esc(t.unit)}</span></label>` : ''}
           <div class="ob-freq">${freqPicker(f, attr)}</div>
         </div>`;
-      }).join('')}`;
-    button = 'Weiter';
+      }).join('')}</div>`;
+    button = 'Passt so';
   } else if (ob.step === 3) {
     body = `<h1 class="large-title">Check-in</h1>
       <p class="ob-lead">Ein paar kurze Fragen, die du einmal am Tag beantwortest. So siehst du mit der Zeit, wie es dir geht. Wähle aus, was dich interessiert, ändern kannst du es später unter Routinen.</p>
@@ -806,7 +882,7 @@ function renderToday() {
 
   // Wackeln, wenn gerade alles erledigt wurde
   const popEye = allDone && ui.lastAllDone[d] === false;
-  if (popEye) ui.wobble = true;
+  if (popEye) { ui.wobble = true; ui.eyeMoment = true; haptic(); }
   ui.lastAllDone[d] = allDone;
   // Daruma wackelt bei jedem Abhaken (Mattis Wunsch)
   ui.lastDone = ui.lastDone || {};
@@ -842,7 +918,7 @@ function renderToday() {
 
     ${sectionHead('habits', 'Habits', habitsFolded(d, habits), counted.length ? `${counted.filter((h) => isDone(h, d)).length} von ${counted.length} erledigt` : '')}
     ${habitsFolded(d, habits) ? '' : `<div class="card">
-      ${habits.length ? habits.filter((h) => !isDone(h, d)).map((h) => habitRow(h, d, future)).join('') + doneStamps(habits.filter((h) => isDone(h, d))) : (state.habits.length ? '<p class="empty">An diesem Tag stehen keine Habits an.</p>' : '<p class="empty">Noch keine Habits. <button class="link" data-action="tab" data-tab="habits">Im Reiter Routinen anlegen</button></p>')}
+      ${habits.length ? habits.filter((h) => !isDone(h, d) || msNow(h, d)).map((h) => habitRow(h, d, future)).join('') + doneStamps(habits.filter((h) => isDone(h, d) && !msNow(h, d))) : (state.habits.length ? '<p class="empty">An diesem Tag stehen keine Habits an.</p>' : '<p class="empty">Noch keine Habits. <button class="link" data-action="tab" data-tab="habits">Im Reiter Routinen anlegen</button></p>')}
     </div>`}
 
 
@@ -892,7 +968,11 @@ function renderWeek(today) {
   return `<div class="week week-slim" data-swipe-week>${cells.join('')}</div>`;
 }
 
+const msNow = (h, d) => ui.milestone && ui.milestone.id === h.id && ui.milestone.day === d;
 function habitRow(h, d, future) {
+  if (msNow(h, d)) {
+    return `<div class="row hab-row one-line milestone-row"><div class="row-main"><span class="emoji">${pic(h.icon)}</span><span class="name ms-name">${ui.milestone.n}× ${esc(h.name)}</span></div><div class="controls">${sealSVG(ui.milestone.n)}</div></div>`;
+  }
   const done = isDone(h, d);
   const v = valueOf(h, d);
   const dis = future ? 'disabled' : '';
@@ -1464,6 +1544,12 @@ function freqValues(f) {
   return { weekdays: [0, 1, 2, 3, 4, 5, 6], perWeek: 0 };
 }
 const FREQS = [['daily', 'Täglich'], ['days', 'An Tagen'], ['week', 'Pro Woche']];
+function obSummary(t, f) {
+  const goal = t.kind === 'check' || f.noGoal ? '' : `${t.kind === 'limit' ? 'max. ' : ''}${f.target} ${t.unit}`.trim();
+  const freq = f.freq === 'week' ? `${f.perWeek}× pro Woche` : f.freq === 'days' ? WEEKDAYS.filter(([n]) => f.weekdays.includes(n)).map(([, l]) => l).join(', ') || 'keine Tage' : 'täglich';
+  return [goal, freq].filter(Boolean).join(' · ');
+}
+
 function freqPicker(f, attrs) {
   return `<div class="segmented">${FREQS.map(([k, l]) => `<button class="${f.freq === k ? 'on' : ''}" data-action="set-freq" data-freq="${k}" ${attrs}>${l}</button>`).join('')}</div>
     ${f.freq === 'days' ? `<div class="weekdays" style="margin-top:10px">${WEEKDAYS.map(([n, l]) => `<button class="${f.weekdays.includes(n) ? 'on' : ''}" data-action="toggle-weekday" data-n="${n}" ${attrs}>${l}</button>`).join('')}</div>` : ''}
@@ -1520,8 +1606,9 @@ function renderPickSheet() {
   return sheetShell(h.name, cancelBtn, '', body);
 }
 function savePicks(names) {
-  const h = habitById(ui.sheet.id);
+  const h = habitById(ui.sheet.id), was = isDone(h, ui.day);
   setPicks(h, ui.day, [...new Set(names.map((x) => x.trim()).filter(Boolean))]);
+  checkMilestone(h, ui.day, was);
   ui.sheet = null; ui.draft = null; commit();
 }
 
@@ -1715,13 +1802,14 @@ const actions = {
   'toggle-habit'(el) {
     const h = habitById(el.dataset.id);
     // Ja/Nein mit „Mal pro Tag“: jeder Tipp füllt ein Stück, voll → wieder leer
-    const many = h.kind === 'check' && h.times > 1;
-    setValue(h, ui.day, isDone(h, ui.day) ? 0 : many ? (valueOf(h, ui.day) || 0) + 1 : 1);
+    const many = h.kind === 'check' && h.times > 1, was = isDone(h, ui.day);
+    setValue(h, ui.day, was ? 0 : many ? (valueOf(h, ui.day) || 0) + 1 : 1);
+    checkMilestone(h, ui.day, was);
     commit();
   },
   'catch-up'(el) { const h = habitById(el.dataset.id); setValue(h, addDays(todayKey(), -1), h.kind === 'check' ? 1 : h.target); persist(); toast(`„${h.name}“ für gestern nachgeholt`); },
-  'fill-habit'(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, isDone(h, ui.day) ? 0 : h.target); commit(); },
-  step(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, Math.max(0, valueOf(h, ui.day) + Number(el.dataset.dir) * h.step)); commit(); },
+  'fill-habit'(el) { const h = habitById(el.dataset.id), was = isDone(h, ui.day); setValue(h, ui.day, was ? 0 : h.target); checkMilestone(h, ui.day, was); commit(); },
+  step(el) { const h = habitById(el.dataset.id), was = isDone(h, ui.day); setValue(h, ui.day, Math.max(0, valueOf(h, ui.day) + Number(el.dataset.dir) * h.step)); checkMilestone(h, ui.day, was); commit(); },
   'toggle-limit'(el) {
     const h = habitById(el.dataset.id), k = logKey(h, ui.day);
     if (isDone(h, ui.day)) state.logs[k] = LIMIT_OVER; else delete state.logs[k];
@@ -1800,6 +1888,7 @@ const actions = {
   },
   'ob-back'() { const ob = ui.ob; ob.step = Math.max(0, ob.step - (ob.step === 3 && !ob.habits.length ? 2 : 1)); window.scrollTo(0, 0); render(); },
   'ob-question'(el) { const ob = ui.ob, t = el.dataset.text; ob.questions = ob.questions.includes(t) ? ob.questions.filter((x) => x !== t) : [...ob.questions, t]; render(); },
+  'ob-open'(el) { const ob = ui.ob; ob.open = ob.open === el.dataset.name ? null : el.dataset.name; render(); },
   'ob-toggle'(el) { const f = ui.ob.cfg[el.dataset.name]; f[el.dataset.key] = !f[el.dataset.key]; render(); },
   'ob-habit'(el) {
     const ob = ui.ob, n = el.dataset.name;
