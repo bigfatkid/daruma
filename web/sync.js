@@ -83,15 +83,21 @@ const Sync = {
     if (!res.ok) throw Object.assign(new Error((data && (data.msg || data.message || data.error_description || data.error)) || `Fehler ${res.status}`), { status: res.status, data });
     return data;
   },
-  async ensureToken(force = false) {
+  // Nur eine Erneuerung gleichzeitig: Supabase tauscht den Refresh-Token bei jeder Erneuerung aus.
+  // Zwei parallele Anfragen (Sync + Erinnerungen) konnten sich gegenseitig den Token ungültig machen.
+  ensureToken(force = false) {
     const m = this.meta;
-    if (!m || !m.refresh) throw Object.assign(new Error('Nicht angemeldet'), { relogin: true });
-    if (!force && m.access && m.expiresAt && m.expiresAt - 90 > Date.now() / 1000) return;
+    if (!m || !m.refresh) return Promise.reject(Object.assign(new Error('Nicht angemeldet'), { relogin: true }));
+    if (!force && m.access && m.expiresAt && m.expiresAt - 90 > Date.now() / 1000) return Promise.resolve();
+    if (!this.refreshing) this.refreshing = this.refreshToken(m).finally(() => { this.refreshing = null; });
+    return this.refreshing;
+  },
+  async refreshToken(m) {
     let s;
     try {
       s = await this.call('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: { refresh_token: m.refresh }, auth: false });
     } catch (e) {
-      if (e.status && e.status >= 400 && e.status < 500) { m.access = null; m.refresh = null; this.saveMeta(); throw Object.assign(e, { relogin: true }); }
+      if (e.status === 400 || e.status === 401 || e.status === 403) { m.access = null; m.refresh = null; this.saveMeta(); throw Object.assign(e, { relogin: true }); }
       throw e;
     }
     this.takeSession(s);
@@ -148,6 +154,13 @@ const Sync = {
     for (let i = 0; i < 50 && this.running; i++) await new Promise((r) => setTimeout(r, 200));
     return this.status === 'ok' && JSON.stringify(this.hooks.getState()) === JSON.stringify(this.loadBase());
   },
+  dropGuest() {
+    console.warn('Gast-Anmeldung verloren, lege neues Gast-Konto an');
+    this.meta = null; this.saveMeta();
+    try { localStorage.removeItem(SYNC_BASE_KEY); } catch (e) { /* egal */ }
+    if (this.hooks) this.hooks.guestLast = 0;
+    this.status = 'off';
+  },
   async logout() {
     const m = this.meta;
     if (m && m.access) fetch(`${SB_URL}/auth/v1/logout`, { method: 'POST', headers: { apikey: SB_KEY, Authorization: `Bearer ${m.access}` } }).catch(() => {});
@@ -201,6 +214,8 @@ const Sync = {
     this.timer = setTimeout(() => this.run(), 2000);
   },
   async run() {
+    // Gast ohne gültige Anmeldung (Token verloren): neues Gast-Konto anlegen, die Daten auf dem Gerät werden hochgeladen
+    if (this.isGuest() && !this.meta.refresh) this.dropGuest();
     if ((!this.loggedIn() || (this.isGuest() && !this.meta.linked)) && this.hooks.autoGuest) return this.hooks.autoGuest();
     if (!this.linked()) return;
     if (this.running) { this.again = true; return; }
@@ -213,7 +228,8 @@ const Sync = {
       if (r === 'busy') setTimeout(() => this.run(), 5000); // gerade wird getippt: gleich noch mal
       this.setStatus('ok');
     } catch (e) {
-      if (e.relogin) this.setStatus('relogin', e.message);
+      if (e.relogin && this.isGuest()) { this.dropGuest(); setTimeout(() => this.run(), 500); }
+      else if (e.relogin) this.setStatus('relogin', e.message);
       else if (e.net || e.status >= 500) this.setStatus(navigator.onLine ? 'paused' : 'offline', e.message);
       else this.setStatus('paused', e.message);
       console.warn('Sync', e);
