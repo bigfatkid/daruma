@@ -24,5 +24,9 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
+      # GitHub listet das hochgeladene Paket manchmal erst nach ein paar Sekunden.
+      # Ohne die Pause scheitert deploy-pages mit „No artifacts named github-pages“.
+      - name: Kurz warten
+        run: sleep 20
       - id: deployment
         uses: actions/deploy-pages@v4
