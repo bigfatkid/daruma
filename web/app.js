@@ -903,9 +903,8 @@ function habitRow(h, d, future) {
     controls = `<button class="status-btn" data-action="toggle-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Abhaken'}">${statusCircle(done ? 'done' : 'open', (v || 0) / (h.times || 1))}</button>`;
   } else if (h.kind === 'count') {
     // Einstellung: "whole" = ganz oder gar nicht (Standard), "steps" = Schritt für Schritt mit − / +
-    // Schritte: jeder Tipp zählt einen Schritt (z.B. 1 L), − nur zum Korrigieren
-    controls = steps ? `${v > 0 && !done ? `<button class="step" data-action="step" data-id="${h.id}" data-dir="-1" ${dis} aria-label="Weniger">−</button>` : ''}
-      <button class="status-btn" data-action="${done ? 'fill-habit' : 'step'}" data-dir="1" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : `${num(h.step)} ${esc(h.unit)} mehr`}">${statusCircle(done ? 'done' : 'open', v / h.target)}</button>`
+    // Schritte: jeder Tipp zählt einen Schritt (z.B. 1 L). Zurück: Zeile nach links wischen (Matti, Variante 4)
+    controls = steps ? `<button class="status-btn" data-action="${done ? 'fill-habit' : 'step'}" data-dir="1" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : `${num(h.step)} ${esc(h.unit)} mehr`}">${statusCircle(done ? 'done' : 'open', v / h.target)}</button>`
       : `<button class="status-btn" data-action="fill-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Erledigt'}">${statusCircle(done ? 'done' : 'open')}</button>`;
   } else if (!steps) {
     // Limit im Modus "ganz oder gar nicht": nur abhaken, dass das Limit eingehalten wurde
@@ -930,12 +929,14 @@ function habitRow(h, d, future) {
     ? `<span class="name-wrap"><span class="name">${esc(shown)}</span><span class="tag">${sub}</span></span>`
     : `<span class="name">${esc(shown)}</span>`;
   const stamp = done ? '<svg class="picto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>' : pic(h.icon);
- return `<div class="row hab-row one-line ${done ? 'is-done' : ''} ${goalMet(h, d) ? 'goal-met' : ''} ${picked.length > 1 ? 'multi-picked' : ''}">
+ const back = steps && h.kind === 'count' && v > 0 && !done && !future;
+  const html = `<div class="row hab-row one-line ${back ? 'swipe-row' : ''} ${done ? 'is-done' : ''} ${goalMet(h, d) ? 'goal-met' : ''} ${picked.length > 1 ? 'multi-picked' : ''}">
     ${(h.kind !== 'limit' || !steps) && !future
       ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : h.kind === 'choice' ? 'open-pick' : h.kind === 'limit' ? 'toggle-limit' : steps && !done ? 'step' : 'fill-habit'}" data-dir="1" data-id="${h.id}"><span class="emoji">${stamp}</span>${label}</button>`
       : `<div class="row-main"><span class="emoji">${stamp}</span>${label}</div>`}
     <div class="controls">${controls}</div>
   </div>`;
+  return back ? `<div class="swipe" data-swipe="step" data-id="${h.id}"><button class="swipe-del swipe-minus" data-action="step" data-dir="-1" data-id="${h.id}" tabindex="-1">−${num(h.step)} ${esc(h.unit)}</button>${html}</div>` : html;
 }
 
 // Erledigte Habits als Stempelreihe (Variante C, Matti): Platz für die To-Dos
