@@ -39,6 +39,7 @@ Object.assign(PICTO, {
   'log-in': '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/>',
   'cloud-off': '<path d="m2 2 20 20"/><path d="M5.782 5.782A7 7 0 0 0 9 19h8.5a4.5 4.5 0 0 0 1.307-.193"/><path d="M21.532 16.5A4.5 4.5 0 0 0 17.5 10h-1.79A7.008 7.008 0 0 0 10 5.07"/>',
   'refresh-cw': '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  bell: '<path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/>',
   'log-out': '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
 });
 function pic(icon) {
@@ -624,7 +625,8 @@ function renderSettingsSheet() {
     </div>
     ${Sync.isGuest() ? '<p class="section-footer">Deine Daten werden automatisch online gesichert. Mit „Konto sichern“ (E-Mail und Passwort) hast du sie auch auf dem Mac oder einem neuen Handy.</p>' : ''}
     <h3 class="section-title">Erinnerung</h3>
-    <div class="card"><div class="row"><button class="row-main" data-action="open-reminder"><span class="emoji">${pic('🌙')}</span><span class="name">Tägliche Erinnerung einrichten</span></button></div></div>
+    <div class="card"><div class="row"><button class="row-main" data-action="open-push-test"><span class="emoji">${pic('bell')}</span><span class="name">Mitteilungen testen</span></button></div>
+      <div class="row"><button class="row-main" data-action="open-reminder"><span class="emoji">${pic('🌙')}</span><span class="name">Tägliche Erinnerung einrichten</span></button></div></div>
     <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="tour-start"><span class="emoji">${pic('🧭')}</span><span class="name">App-Tour noch mal ansehen</span></button></div></div>`;
   return sheetShell('Einstellungen', '', '<button class="link" style="font-weight:600" data-action="close-sheet">Fertig</button>', body);
 }
@@ -1424,6 +1426,19 @@ function renderSheet() {
       </div>
     </div></div>`;
   }
+  if (s.type === 'push-test') {
+    const p = ui.push || {};
+    const perm = typeof Push !== 'undefined' ? Push.permission() : 'unsupported';
+    const where = typeof Push === 'undefined' || !Push.supported() || !Push.standalone()
+      ? '<p class="section-footer"><b>Wichtig:</b> Das geht nur in der Daruma-App vom Home-Bildschirm, nicht in Safari.</p>' : '';
+    const denied = perm === 'denied'
+      ? '<p class="section-footer"><b>Mitteilungen sind für Daruma ausgeschaltet.</b> Einschalten: iPhone-Einstellungen → Mitteilungen → Daruma → Mitteilungen erlauben.</p>' : '';
+    const body = `<p class="pick-lead">Wir prüfen, ob dein iPhone Mitteilungen von Daruma bekommt. Tipp auf den Knopf und dann bei der iPhone-Frage auf <b>Erlauben</b>.</p>
+      ${where}${denied}
+      <div class="stack"><button class="btn-primary" data-action="push-test" ${p.busy ? 'disabled' : ''}>${p.busy ? 'Wird gesendet …' : 'Testnachricht senden'}</button></div>
+      ${p.msg ? `<p class="section-footer">${esc(p.msg)}</p>` : ''}`;
+    return sheetShell('Mitteilungen testen', '', '<button class="link" style="font-weight:600" data-action="open-settings">Fertig</button>', body);
+  }
   if (s.type === 'reminder-help') {
     const body = `<p class="pick-lead">Daruma kann als Web-App keine Mitteilungen schicken. Dein iPhone kann dich aber jeden Tag erinnern:</p>
       <div class="card help-steps">
@@ -2055,6 +2070,29 @@ const actions = {
   'backup-later'() { state.backupSnooze = addDays(todayKey(), 3); commit(); },
   'import-confirm'() { confirmImport(); },
   'open-reminder'() { openSheet({ type: 'reminder-help' }); },
+  'open-push-test'() { ui.push = null; openSheet({ type: 'push-test' }); if (typeof Push !== 'undefined') Push.prefetchKey(); },
+  // Test für Push-Mitteilungen (Stufe 2b): Erlaubnis holen, Gerät eintragen, Testnachricht schicken
+  async 'push-test'() {
+    if (ui.push && ui.push.busy) return;
+    ui.push = { busy: true }; render();
+    let msg;
+    try {
+      if (typeof Push === 'undefined' || !Push.supported()) throw Object.assign(new Error(''), { code: 'unsupported' });
+      if (!Sync.loggedIn()) throw Object.assign(new Error(''), { code: 'login' });
+      await Push.enable();
+      const r = await Push.test();
+      const res = (r && r.results) || [];
+      const ok = res.filter((x) => x.status >= 200 && x.status < 300).length;
+      msg = ok ? `Gesendet. Die Mitteilung sollte in ein paar Sekunden erscheinen, auch oben als Banner. (Code ${res.map((x) => x.status).join(', ')})`
+        : `Apple hat die Nachricht nicht angenommen (Code ${res.map((x) => `${x.status} ${x.info || ''}`.trim()).join(', ')}).`;
+    } catch (e) {
+      msg = e.code === 'unsupported' ? 'Dieses Gerät oder dieser Browser kann keine Mitteilungen. Öffne Daruma über das Icon auf dem Home-Bildschirm.'
+        : e.code === 'denied' ? 'Mitteilungen wurden nicht erlaubt.'
+        : e.code === 'login' ? 'Dafür braucht Daruma ein Konto (auch Gast-Konto).'
+        : `Hat nicht geklappt: ${e.message || e}`;
+    }
+    ui.push = { msg }; render();
+  },
   'close-sheet'() { closeSheet(); },
   overlay(el, ev) { if (ev.target === el) closeSheet(); },
 };
@@ -2343,6 +2381,7 @@ function applyDemoScene(scene) {
   if (scene === 'checkin') ui.sheet = { type: 'checkin' };
   if (scene === 'backup') { state.firstUse = addDays(today, -20); state.lastBackup = addDays(today, -16); }
   if (scene === 'reminder') { ui.tab = 'progress'; ui.sheet = { type: 'reminder-help' }; }
+  if (scene === 'pushtest') { ui.tab = 'progress'; ui.sheet = { type: 'push-test' }; }
   if (/^(choice|pick|multipick|choiceedit|choicestats)$/.test(scene)) {
     const sport = { ...makeHabit({ name: 'Sport', icon: '🏃', kind: 'choice' }, 1.5), options: ['Laufen', 'Krafttraining', 'Radfahren', 'Yoga', 'Schwimmen'], perWeek: 3, createdAt: addDays(today, -30) };
     const hip = { ...makeHabit({ name: 'Hüftübungen', icon: '🤸', kind: 'choice' }, 1.6), options: ['Taubenpose', 'Seitheben', 'Hip Flexor Stretch', '90/90 Stretch', 'Brücke', 'Clamshells'], multi: true, minPick: 2, target: 2, createdAt: addDays(today, -30) };
