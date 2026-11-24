@@ -903,9 +903,8 @@ function habitRow(h, d, future) {
     controls = `<button class="status-btn" data-action="toggle-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Abhaken'}">${statusCircle(done ? 'done' : 'open', (v || 0) / (h.times || 1))}</button>`;
   } else if (h.kind === 'count') {
     // Einstellung: "whole" = ganz oder gar nicht (Standard), "steps" = Schritt für Schritt mit − / +
-    // Schritte: jeder Tipp zählt einen Schritt (z.B. 1 L), − nur zum Korrigieren
-    controls = steps ? `${v > 0 && !done ? `<button class="step" data-action="step" data-id="${h.id}" data-dir="-1" ${dis} aria-label="Weniger">−</button>` : ''}
-      <button class="status-btn" data-action="${done ? 'fill-habit' : 'step'}" data-dir="1" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : `${num(h.step)} ${esc(h.unit)} mehr`}">${statusCircle(done ? 'done' : 'open', v / h.target)}</button>`
+    // Schritte: jeder Tipp zählt einen Schritt (z.B. 1 L), Korrektur über „Rückgängig“
+    controls = steps ? `<button class="status-btn" data-action="${done ? 'fill-habit' : 'step'}" data-dir="1" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : `${num(h.step)} ${esc(h.unit)} mehr`}">${statusCircle(done ? 'done' : 'open', v / h.target)}</button>`
       : `<button class="status-btn" data-action="fill-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Erledigt'}">${statusCircle(done ? 'done' : 'open')}</button>`;
   } else if (!steps) {
     // Limit im Modus "ganz oder gar nicht": nur abhaken, dass das Limit eingehalten wurde
@@ -1719,7 +1718,14 @@ const actions = {
   },
   'catch-up'(el) { const h = habitById(el.dataset.id); setValue(h, addDays(todayKey(), -1), h.kind === 'check' ? 1 : h.target); persist(); toast(`„${h.name}“ für gestern nachgeholt`); },
   'fill-habit'(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, isDone(h, ui.day) ? 0 : h.target); commit(); },
-  step(el) { const h = habitById(el.dataset.id); setValue(h, ui.day, Math.max(0, valueOf(h, ui.day) + Number(el.dataset.dir) * h.step)); commit(); },
+  step(el) {
+    const h = habitById(el.dataset.id), k = logKey(h, ui.day), prev = state.logs[k];
+    const v = Math.max(0, valueOf(h, ui.day) + Number(el.dataset.dir) * h.step);
+    setValue(h, ui.day, v);
+    commit();
+    // Statt Minus-Knopf: kurz „Rückgängig“ anbieten (Matti)
+    toast(`${num(Math.min(v, h.target))} von ${num(h.target)} ${h.unit}`.trim(), () => { if (prev === undefined) delete state.logs[k]; else state.logs[k] = prev; });
+  },
   'toggle-limit'(el) {
     const h = habitById(el.dataset.id), k = logKey(h, ui.day);
     if (isDone(h, ui.day)) state.logs[k] = LIMIT_OVER; else delete state.logs[k];
