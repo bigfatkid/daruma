@@ -7,7 +7,8 @@
 //   { action: "key" }   -> öffentlicher Schlüssel für die App (wird beim ersten Mal erzeugt)
 //   { action: "test" }  -> schickt eine Testnachricht an alle Geräte der angemeldeten Person
 //   { action: "tick" }  -> (alle 5 Minuten per pg_cron) schickt fällige Abend-Erinnerungen.
-//                          Nur wenn an dem Tag noch etwas offen ist, höchstens einmal pro Tag und Gerät.
+//                          Abend: nur wenn noch etwas offen ist, höchstens einmal pro Tag und Gerät.
+//                          Pro Habit: zur eingestellten Uhrzeit, wenn das Habit noch nicht abgehakt ist.
 
 const SB_URL = Deno.env.get('SUPABASE_URL');
 const SB_SERVICE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -168,16 +169,28 @@ async function tick() {
   for (const s of subs) {
     const st = s.settings || {};
     const now = localNow(st.tz || 'Europe/Berlin');
-    if (s.last_sent === now.date) continue;
-    const [hh, mm] = String(st.time || '19:00').split(':').map(Number);
-    const late = now.minutes - (hh * 60 + mm);
-    if (late < 0 || late > 180) continue; // noch nicht Zeit, oder schon zu spät (z. B. Server war aus)
     const day = st.days && st.days[now.date];
+    const send = async (msg, ttl) => { const r = await sendPush(s, msg, ttl); if (r.status >= 200 && r.status < 300) sent++; return r.status; };
+    const minOf = (t) => { const [hh, mm] = String(t).split(':').map(Number); return hh * 60 + mm; };
+
+    // Erinnerung pro Habit: genau im 5-Minuten-Fenster ab der Uhrzeit (der Zeitplan läuft alle 5 Minuten)
+    let gone = false;
+    for (const r of (day && day.r) || []) {
+      const late = now.minutes - minOf(r.at);
+      if (late < 0 || late >= 5) continue;
+      const status = await send({ title: r.n, body: 'Jetzt ist ein guter Moment dafür.', tag: `habit-${r.n}` }, 3600);
+      if (status === 404 || status === 410) { gone = true; break; }
+    }
+    if (gone) continue;
+
+    // Abend-Erinnerung: höchstens einmal pro Tag
+    if (st.evening === false || s.last_sent === now.date) continue;
+    const late = now.minutes - minOf(st.time || '19:00');
+    if (late < 0 || late > 180) continue; // noch nicht Zeit, oder schon zu spät (z. B. Server war aus)
     const open = day ? (day.hn ?? (day.h || []).length) + (day.tn ?? (day.t || []).length) : 0;
     if (open > 0) {
-      const r = await sendPush(s, { ...reminderText(day), tag: 'abend' }, 3 * 3600);
-      if (r.status >= 200 && r.status < 300) sent++;
-      if (r.status === 404 || r.status === 410) continue;
+      const status = await send({ ...reminderText(day), tag: 'abend' }, 3 * 3600);
+      if (status === 404 || status === 410) continue;
     }
     await db(`push_subs?endpoint=eq.${encodeURIComponent(s.endpoint)}`, { method: 'PATCH', body: { last_sent: now.date }, prefer: 'return=minimal' });
   }
