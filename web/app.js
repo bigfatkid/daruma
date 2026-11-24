@@ -632,7 +632,7 @@ function renderSettingsSheet() {
     <div class="card"><div class="row"><button class="row-main" data-action="reminder-toggle" role="switch" aria-checked="${state.reminder.on}"><span class="emoji">${pic('bell')}</span><span class="name">Abend-Erinnerung</span><span class="switch ${state.reminder.on ? 'on' : ''}" style="margin-left:auto"><i></i></span></button></div>
       ${state.reminder.on ? `<div class="row"><div class="row-main"><span class="emoji">${pic('clock')}</span><span class="name">Uhrzeit</span></div>
         <div class="controls"><input class="time-field" type="time" step="900" data-setting="reminder-time" value="${state.reminder.time}"></div></div>` : ''}</div>
-    <p class="section-footer">${esc(ui.pushMsg || 'Nur wenn an dem Tag noch etwas offen ist.')}</p>
+    ${ui.pushMsg ? `<p class="section-footer">${esc(ui.pushMsg)}</p>` : ''}
     <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="tour-start"><span class="emoji">${pic('🧭')}</span><span class="name">App-Tour noch mal ansehen</span></button></div></div>`;
   return sheetShell('Einstellungen', '', '<button class="link" style="font-weight:600" data-action="close-sheet">Fertig</button>', body);
 }
