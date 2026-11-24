@@ -770,8 +770,7 @@ function renderOnboarding() {
       <h1>Kleine Schritte, jeden Tag.</h1>
       <p>Daruma behält für dich den Überblick über Habits, To-Dos und Projekte. Schaffst du alles für heute, öffnet er sein zweites Auge.</p></div>
       <h3 class="section-title">Wie heißt du?</h3>
-      <input class="field" id="ob-name" value="${esc(ob.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name" enterkeyhint="next">
-      <p class="ob-restore"><button class="link" data-action="open-login">Schon ein Konto? Anmelden</button></p>`;
+      <input class="field" id="ob-name" value="${esc(ob.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name" enterkeyhint="next">`;
     button = 'Los geht’s';
   } else if (ob.step === 1) {
     body = `<h1 class="large-title">Deine Habits</h1>
@@ -812,7 +811,12 @@ function renderOnboarding() {
       <header class="nav"><div class="nav-side">${back}</div>${dots}<div class="nav-side right"></div></header>
       ${body}
     </main>
-    <div class="ob-footer"><button class="btn-primary" data-action="ob-next">${button}</button></div>`;
+    <div class="ob-footer">${ob.step === 0 && !Sync.loggedIn()
+      // Start: Konto anlegen ist der Weg, den wir empfehlen (Matti); Gast geht auch, Anmelden für Mac/neues Handy
+      ? `<div class="ob-start"><button class="btn-primary" data-action="ob-account" data-mode="new">Konto anlegen</button>
+        <button class="btn-outline" data-action="ob-next">Als Gast starten</button>
+        <button class="link" data-action="ob-account" data-mode="login">Ich habe schon ein Konto</button></div>`
+      : `<button class="btn-primary" data-action="ob-next">${button}</button>`}</div>`;
 }
 
 function finishOnboarding() {
@@ -1906,6 +1910,11 @@ const actions = {
     ob.step += ob.step === 1 && !ob.habits.length ? 2 : 1; // ohne Habits kein Feinschliff
     window.scrollTo(0, 0); render();
   },
+  'ob-account'(el) {
+    const f = document.getElementById('ob-name'); if (f) ui.ob.name = f.value.trim();
+    const isNew = el.dataset.mode === 'new';
+    openSheet({ type: 'login' }, { step: 'email', email: '', isNew }, '#login-email');
+  },
   'ob-back'() { const ob = ui.ob; ob.step = Math.max(0, ob.step - (ob.step === 3 && !ob.habits.length ? 2 : 1)); window.scrollTo(0, 0); render(); },
   'ob-question'(el) { const ob = ui.ob, t = el.dataset.text; ob.questions = ob.questions.includes(t) ? ob.questions.filter((x) => x !== t) : [...ob.questions, t]; render(); },
   'ob-open'(el) { const ob = ui.ob; ob.open = ob.open === el.dataset.name ? null : el.dataset.name; render(); },
@@ -2436,7 +2445,7 @@ function renderLoginSheet() {
       <button class="btn-plain" data-action="login-upload"${busy}>Daten von diesem Gerät nehmen</button></div>
       <p class="section-footer">Die Daten, die nicht gelten, werden als Kopie auf diesem Gerät aufgehoben.</p>`;
   }
-  return sheetShell(dr.step === 'secure' ? 'Konto sichern' : 'Anmelden', dr.busy ? '' : cancelBtn, '', body);
+  return sheetShell(dr.step === 'secure' ? 'Konto sichern' : dr.step === 'email' && dr.isNew ? 'Konto anlegen' : 'Anmelden', dr.busy ? '' : cancelBtn, '', body);
 }
 function loginError(e) {
   if (e && e.net) return 'Keine Verbindung. Bitte später noch mal versuchen.';
@@ -2464,6 +2473,7 @@ function keepCopy(tag) {
 }
 function loginDone(text) {
   ui.sheet = null; ui.draft = null; ui.tab = 'today'; ui.day = todayKey();
+  if (!state.setupDone && ui.ob.step === 0) ui.ob.step = 1; // Konto beim Start angelegt: weiter mit der Einrichtung
   toast(text);
   Sync.run();
 }
@@ -2481,7 +2491,7 @@ Object.assign(actions, {
       const remote = await Sync.fetchRemote();
       if (!remote) {
         if (hasLocalData()) { dr.step = 'migrate'; return; }
-        await Sync.link('later'); loginDone('Angemeldet'); return;
+        await Sync.link('later'); loginDone(dr.isNew ? 'Konto angelegt' : 'Angemeldet'); return;
       }
       if (!hasLocalData()) { keepCopy('vorSync'); await Sync.link('download'); loginDone('Daten aus deinem Konto geladen'); return; }
       const rd = remote.data || {};
