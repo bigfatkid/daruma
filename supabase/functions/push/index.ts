@@ -5,6 +5,7 @@
 //
 // Aufrufe (POST, JSON):
 //   { action: "key" }   -> öffentlicher Schlüssel für die App (wird beim ersten Mal erzeugt)
+//   { action: "register", endpoint, keys } -> Gerät für die angemeldete Person eintragen
 //   { action: "test" }  -> schickt eine Testnachricht an alle Geräte der angemeldeten Person
 //   { action: "tick" }  -> (alle 5 Minuten per pg_cron) schickt fällige Abend-Erinnerungen.
 //                          Abend: nur wenn noch etwas offen ist, höchstens einmal pro Tag und Gerät.
@@ -201,13 +202,22 @@ async function tick() {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   try {
-    const { action } = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({}));
+    const { action } = body;
     // Der Zeitplan (pg_cron) braucht kein Konto: er verschickt nur, was ohnehin fällig ist
     if (action === 'tick') return json(await tick());
     const user = await userFrom(req);
     if (!user) return json({ error: 'Nicht angemeldet' }, 401);
 
     if (action === 'key') return json({ key: (await vapidKeys()).publicKey });
+
+    // Gerät eintragen (oder auf das aktuelle Konto umziehen, z. B. nach neuem Gast-Konto)
+    if (action === 'register') {
+      const { endpoint, keys } = body;
+      if (typeof endpoint !== 'string' || !/^https:\/\//.test(endpoint) || !keys || typeof keys.p256dh !== 'string' || typeof keys.auth !== 'string') return json({ error: 'Ungültig' }, 400);
+      await db('push_subs?on_conflict=endpoint', { method: 'POST', body: { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth }, user_id: user.id, updated_at: new Date().toISOString() }, prefer: 'resolution=merge-duplicates,return=minimal' });
+      return json({ ok: true });
+    }
 
     if (action === 'test') {
       const subs = await db(`push_subs?user_id=eq.${user.id}&select=endpoint,keys`);

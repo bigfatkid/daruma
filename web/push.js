@@ -16,7 +16,7 @@ const Push = {
   standalone() { return !!(navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches)); },
   permission() { return 'Notification' in window ? Notification.permission : 'unsupported'; },
 
-  async fn(action) { return Sync.call('/functions/v1/push', { method: 'POST', body: { action } }); },
+  async fn(action, extra = {}) { return Sync.call('/functions/v1/push', { method: 'POST', body: { action, ...extra } }); },
 
   cachedKey() { try { return localStorage.getItem(PUSH_KEY_CACHE) || ''; } catch (e) { return ''; } },
   // Vorab holen, damit der Tipp auf den Knopf direkt die iPhone-Frage zeigen kann
@@ -42,11 +42,15 @@ const Push = {
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
     const j = sub.toJSON();
     try { localStorage.setItem(PUSH_ENDPOINT, j.endpoint); } catch (e) { /* egal */ }
-    await Sync.call('/rest/v1/push_subs?on_conflict=endpoint', {
-      method: 'POST',
-      body: { endpoint: j.endpoint, keys: j.keys, user_id: Sync.meta.userId, updated_at: new Date().toISOString() },
-      prefer: 'resolution=merge-duplicates,return=minimal',
-    });
+    // Über den Server eintragen: so zieht ein Gerät auch zu einem neuen Konto um
+    // (z. B. neues Gast-Konto), was die Tabellenregeln direkt nicht erlauben würden.
+    try { await this.fn('register', { endpoint: j.endpoint, keys: j.keys }); }
+    catch (e) {
+      if (e.status !== 400) throw e; // ältere Server-Version ohne „register“: direkt eintragen
+      await Sync.call('/rest/v1/push_subs?on_conflict=endpoint', { method: 'POST', body: { endpoint: j.endpoint, keys: j.keys, user_id: Sync.meta.userId }, prefer: 'resolution=merge-duplicates,return=minimal' });
+    }
+    this.lastPlan = null;
+    try { localStorage.setItem('daruma.pushUser', Sync.meta.userId); } catch (e) { /* egal */ }
     return sub;
   },
 
@@ -61,6 +65,12 @@ const Push = {
     const settings = r.on || perHabit
       ? { on: true, evening: !!r.on, time: r.time, tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Berlin', days: reminderPlan() }
       : { on: false };
+    // Konto gewechselt (z. B. neues Gast-Konto): dieses Gerät erst beim neuen Konto eintragen
+    let regUser = '';
+    try { regUser = localStorage.getItem('daruma.pushUser') || ''; } catch (e) { /* egal */ }
+    if (settings.on && regUser !== Sync.meta.userId && this.supported() && this.permission() === 'granted') {
+      try { await this.enable(); } catch (e) { /* nächstes Mal */ }
+    }
     const sig = JSON.stringify(settings);
     if (sig === this.lastPlan) return;
     try {
