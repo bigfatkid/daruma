@@ -618,7 +618,7 @@ function renderSettingsSheet() {
       : `<div class="row"><button class="row-main" data-action="sync-now"><span class="emoji">${pic('refresh-cw')}</span><span class="name">Jetzt abgleichen</span></button></div>`}
       ${Sync.isGuest() ? `<div class="row"><button class="row-main" data-action="open-secure"><span class="emoji">${pic('shield-check')}</span><span class="name">Konto sichern</span></button></div>
       <div class="row"><button class="row-main" data-action="open-login-existing"><span class="emoji">${pic('log-in')}</span><span class="name">Mit anderem Konto anmelden</span></button></div>`
-      : `<div class="row"><button class="row-main" data-action="sync-logout"><span class="emoji">${pic('log-out')}</span><span class="name">${ui.confirmLogout ? 'Wirklich abmelden?' : 'Abmelden'}</span></button></div>`}`
+      : `<div class="row"><button class="row-main" data-action="sync-logout"><span class="emoji">${pic('log-out')}</span><span class="name">${{ ask: 'Wirklich abmelden?', busy: 'Wird hochgeladen …', unsynced: 'Nicht alles hochgeladen. Trotzdem abmelden?' }[ui.confirmLogout] || 'Abmelden'}</span></button></div>`}`
     : `
       <div class="row"><button class="row-main" data-action="open-login"><span class="emoji">${pic('cloud')}</span><span class="name">Anmelden und Daten abgleichen</span></button></div>`}
     </div>
@@ -2511,10 +2511,22 @@ Object.assign(actions, {
   },
   'account-later'() { state.accountHintSeen = true; commit(); },
   'sync-now'() { Sync.meta && (Sync.meta.failSince = null); Sync.run(); },
-  'sync-logout'() {
-    if (!ui.confirmLogout) { ui.confirmLogout = true; render(); return; }
+  // Abmelden: erst alles hochladen, dann das Gerät leeren und zurück zur Startseite (Matti, 24.11.)
+  async 'sync-logout'() {
+    if (ui.confirmLogout === 'busy') return;
+    if (!ui.confirmLogout) { ui.confirmLogout = 'ask'; render(); return; }
+    const force = ui.confirmLogout === 'unsynced';
+    ui.confirmLogout = 'busy'; render();
+    if (!force && !(await Sync.flush())) { ui.confirmLogout = 'unsynced'; render(); return; }
     ui.confirmLogout = false;
-    Sync.logout(); render(); toast('Abgemeldet. Deine Daten bleiben auf diesem Gerät.');
+    await Sync.logout();
+    try { Object.keys(localStorage).filter((k) => k.startsWith('daruma.')).forEach((k) => localStorage.removeItem(k)); } catch (e) { /* egal */ }
+    state = freshState();
+    persist();
+    Object.assign(ui, { sheet: null, draft: null, tab: 'today', day: todayKey(), tour: null, checkin: null, ob: { step: 0, name: '', habits: [], cfg: {}, questions: [] } });
+    Sync.hooks.guestLast = 0;
+    window.scrollTo(0, 0);
+    toast('Abgemeldet');
   },
 });
 // Von sync.js gebraucht
