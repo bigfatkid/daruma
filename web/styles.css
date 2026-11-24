@@ -766,3 +766,10 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .ob-chev.open { transform: rotate(90deg); }
 .ob-cfg-open { margin: 0; padding: 0 16px 14px; }
 .save-error { position: fixed; left: 12px; right: 12px; top: calc(var(--safe-top) + 8px); z-index: 60; background: #fff3f0; color: var(--accent); border: 1px solid rgba(192, 57, 43, .3); border-radius: 12px; padding: 10px 14px; font-size: 14px; box-shadow: 0 4px 14px rgba(90, 60, 30, .15); }
+
+/* Konto & Sync (v83) */
+.login-card .field { border-radius: 0; }
+.login-card .field + .field { border-top: 0.5px solid var(--separator); }
+.login-stack { margin-top: 18px; }
+.ob-restore { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.ob-restore .link { font-size: 15px; padding: 8px; }

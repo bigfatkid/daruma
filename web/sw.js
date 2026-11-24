@@ -2,11 +2,12 @@
 // Strategie: erst Netzwerk (damit Updates sofort ankommen), ohne Netz aus dem Zwischenspeicher.
 // Bei sehr schlechtem Netz wartet die App höchstens 3 Sekunden, dann startet sie aus dem Zwischenspeicher (v82).
 const NET_TIMEOUT = 3000;
-const CACHE = 'daruma-v82';
+const CACHE = 'daruma-v83';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
+  './sync.js',
   './app.js',
   './manifest.webmanifest',
   './icons/icon-180.png',
