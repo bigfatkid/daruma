@@ -139,6 +139,15 @@ const Sync = {
     await this.ensureToken(true).catch(() => {});
     this.meta.anon = false; this.saveMeta();
   },
+  // Vor dem Abmelden: alles hochladen. true = Konto hat den Stand dieses Geräts
+  async flush() {
+    if (!this.linked()) return false;
+    for (let i = 0; i < 50 && this.running; i++) await new Promise((r) => setTimeout(r, 200));
+    clearTimeout(this.timer);
+    await this.run();
+    for (let i = 0; i < 50 && this.running; i++) await new Promise((r) => setTimeout(r, 200));
+    return this.status === 'ok' && JSON.stringify(this.hooks.getState()) === JSON.stringify(this.loadBase());
+  },
   async logout() {
     const m = this.meta;
     if (m && m.access) fetch(`${SB_URL}/auth/v1/logout`, { method: 'POST', headers: { apikey: SB_KEY, Authorization: `Bearer ${m.access}` } }).catch(() => {});
