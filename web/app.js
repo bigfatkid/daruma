@@ -115,7 +115,8 @@ function cleanHabit(h, i) {
     weekdays: Array.isArray(h.weekdays) && h.weekdays.length ? h.weekdays.filter((x) => Number.isInteger(x) && x >= 0 && x <= 6) : [0, 1, 2, 3, 4, 5, 6],
     createdAt: dayOk(h.createdAt) ? h.createdAt : todayKey(),
     perWeek: Number.isInteger(h.perWeek) && h.perWeek > 0 ? h.perWeek : 0,
-    times: Number.isInteger(h.times) && h.times > 1 ? h.times : 1, // Ja/Nein: wie oft am Tag (z.B. morgens + abends)
+    times: Number.isInteger(h.times) && h.times > 1 ? h.times : 1, // alt (v75): Ja/Nein mehrmals am Tag, nur noch für den Verlauf
+    tap: h.tap === 'step' ? 'step' : 'whole', // Ziel/Limit: ein Tipp = ganzes Ziel oder ein Schritt (Matti: pro Habit)
     order: typeof h.order === 'number' ? h.order : i,
     options: Array.isArray(h.options) ? h.options.filter((o) => typeof o === 'string' && o.trim()) : [],
     hist: Array.isArray(h.hist) ? h.hist.filter((e) => isObj(e) && dayOk(e.until)) : [],
@@ -176,11 +177,20 @@ function normalize(s) {
   if (!s.catchUpV2 && Array.isArray(s.habits)) s.habits.forEach((h) => { if (isObj(h)) delete h.catchUp; });
   // Einmalig: Wasser und Schlaf zählen pro Tipp um 1 (Mattis Wunsch).
   if (!s.stepV2 && Array.isArray(s.habits)) s.habits.forEach((h) => { if (isObj(h) && (h.name === 'Wasser trinken' || h.name === 'Schlafdauer') && h.step === 0.5) h.step = 1; });
+  // Einmalig: Abhak-Art pro Habit statt global; „Mal pro Tag“ bei Ja/Nein wird ein Ziel mit Einheit „Mal“
+  if (!s.tapV2 && Array.isArray(s.habits)) s.habits.forEach((h) => {
+    if (!isObj(h)) return;
+    if (h.kind === 'check' && Number.isInteger(h.times) && h.times > 1) {
+      h.hist = [...(Array.isArray(h.hist) ? h.hist : []), { until: todayKey(), kind: 'check', target: 1, times: h.times }];
+      Object.assign(h, { kind: 'count', target: h.times, step: 1, unit: 'Mal', times: 1, tap: 'step' });
+    } else if (h.kind === 'count' || h.kind === 'limit') h.tap = s.habitMode === 'steps' ? 'step' : 'whole';
+  });
   // Einmalig: Projekt-Aufgaben rutschen jetzt wie To-Dos weiter. Alte, vergangene Planungen gehen zurück ins Projekt.
   if (!s.projRollV2 && Array.isArray(s.todos)) s.todos.forEach((t) => { if (isObj(t) && t.listId && !t.completedAt && typeof t.plannedDay === 'string' && t.plannedDay < todayKey()) t.plannedDay = null; });
   return {
     version: 1,
     projRollV2: true,
+    tapV2: true,
     name: typeof s.name === 'string' ? s.name : '',
     setupDone: s.setupDone !== false, // bestehende Daten (ohne Feld) gelten als eingerichtet
     tourDone: !!s.tourDone,
@@ -541,8 +551,6 @@ function renderSettingsSheet() {
   const body = `
     <h3 class="section-title">Dein Name</h3>
     <input class="field" id="settings-name" data-setting="name" value="${esc(state.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name">
-    <h3 class="section-title">Habits mit Ziel abhaken</h3>
-    <div class="segmented">${[['whole', 'Ganz oder gar nicht'], ['steps', 'Schritt für Schritt']].map(([k, l]) => `<button class="${(state.habitMode || 'whole') === k ? 'on' : ''}" data-action="habit-mode" data-mode="${k}">${l}</button>`).join('')}</div>
     <h3 class="section-title">Deine Daten</h3>
     <div class="card">
       <div class="row"><button class="row-main" data-action="export"><span class="emoji">${pic('💾')}</span><span class="name">Sicherung herunterladen</span></button></div>
@@ -845,7 +853,7 @@ function renderToday() {
 
     ${sectionHead('todos', 'To-Dos', isFolded('todos'), todos.length ? `${todos.filter((t) => t.completedAt).length} von ${todos.length} erledigt` : 'keine')}
     ${isFolded('todos') ? '' : `<div class="card">
-      ${todos.map((t) => todoRow(t, today, future)).join('')}
+      ${todos.map((t) => todoRow(t, today, future, todos.filter((x) => !x.completedAt).length > 1)).join('')}
       ${d >= today ? `<form class="row add-row" data-form="add-todo">
         <span class="plus">+</span>
         <input id="todo-new" placeholder="${d === today ? 'Neues To-Do für heute' : 'Neues To-Do'}" autocomplete="off" enterkeyhint="done">
@@ -887,7 +895,7 @@ function habitRow(h, d, future) {
   const done = isDone(h, d);
   const v = valueOf(h, d);
   const dis = future ? 'disabled' : '';
-  const steps = state.habitMode === 'steps';
+  const steps = h.tap === 'step';
   let controls;
   if (h.kind === 'choice') {
     controls = `<button class="status-btn" data-action="toggle-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Abhaken'}">${statusCircle(done ? 'done' : 'open')}</button>`;
@@ -895,9 +903,9 @@ function habitRow(h, d, future) {
     controls = `<button class="status-btn" data-action="toggle-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Abhaken'}">${statusCircle(done ? 'done' : 'open', (v || 0) / (h.times || 1))}</button>`;
   } else if (h.kind === 'count') {
     // Einstellung: "whole" = ganz oder gar nicht (Standard), "steps" = Schritt für Schritt mit − / +
-    controls = steps ? `<button class="step" data-action="step" data-id="${h.id}" data-dir="-1" ${v <= 0 || future ? 'disabled' : ''} aria-label="Weniger">−</button>
-      <button class="step" data-action="step" data-id="${h.id}" data-dir="1" ${dis} aria-label="Mehr">+</button>
-      <button class="status-btn" data-action="fill-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Ganz erledigt'}">${statusCircle(done ? 'done' : 'open', v / h.target)}</button>`
+    // Schritte: jeder Tipp zählt einen Schritt (z.B. 1 L), − nur zum Korrigieren
+    controls = steps ? `${v > 0 && !done ? `<button class="step" data-action="step" data-id="${h.id}" data-dir="-1" ${dis} aria-label="Weniger">−</button>` : ''}
+      <button class="status-btn" data-action="${done ? 'fill-habit' : 'step'}" data-dir="1" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : `${num(h.step)} ${esc(h.unit)} mehr`}">${statusCircle(done ? 'done' : 'open', v / h.target)}</button>`
       : `<button class="status-btn" data-action="fill-habit" data-id="${h.id}" ${dis} aria-label="${done ? 'Zurücksetzen' : 'Erledigt'}">${statusCircle(done ? 'done' : 'open')}</button>`;
   } else if (!steps) {
     // Limit im Modus "ganz oder gar nicht": nur abhaken, dass das Limit eingehalten wurde
@@ -921,9 +929,9 @@ function habitRow(h, d, future) {
     ? `<span class="name-wrap"><span class="name">${esc(shown)}</span><span class="tag">${sub}</span></span>`
     : `<span class="name">${esc(shown)}</span>`;
   const stamp = done ? '<svg class="picto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>' : pic(h.icon);
-  return `<div class="row hab-row ${steps ? '' : 'one-line'} ${done ? 'is-done' : ''} ${goalMet(h, d) ? 'goal-met' : ''} ${picked.length > 1 ? 'multi-picked' : ''}">
+ return `<div class="row hab-row one-line ${done ? 'is-done' : ''} ${goalMet(h, d) ? 'goal-met' : ''} ${picked.length > 1 ? 'multi-picked' : ''}">
     ${(h.kind !== 'limit' || !steps) && !future
-      ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : h.kind === 'choice' ? 'open-pick' : h.kind === 'limit' ? 'toggle-limit' : 'fill-habit'}" data-id="${h.id}"><span class="emoji">${stamp}</span>${label}</button>`
+      ? `<button class="row-main" data-action="${h.kind === 'check' ? 'toggle-habit' : h.kind === 'choice' ? 'open-pick' : h.kind === 'limit' ? 'toggle-limit' : steps && !done ? 'step' : 'fill-habit'}" data-dir="1" data-id="${h.id}"><span class="emoji">${stamp}</span>${label}</button>`
       : `<div class="row-main"><span class="emoji">${stamp}</span>${label}</div>`}
     <div class="controls">${controls}</div>
   </div>`;
@@ -978,7 +986,7 @@ function renderHabits() {
     <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="open-catalog"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Habit hinzufügen</span></button></div></div>`;
 }
 
-function todoRow(t, today, future) {
+function todoRow(t, today, future, sortable = false) {
   const list = t.listId ? listById(t.listId) : null;
   const done = !!t.completedAt;
   const tag = [list ? `aus ${list.name}` : '', subsText(t), repeatText(t.repeat),
@@ -988,7 +996,7 @@ function todoRow(t, today, future) {
       <span class="emoji">${pic(list ? list.icon : t.repeat ? '🔁' : '📌')}</span>
       <span class="name-wrap"><span class="name ${done ? 'struck' : ''}">${esc(t.title)}</span>${tag && !done ? `<span class="tag">${esc(tag)}</span>` : ''}</span>
     </button>
-    <div class="controls"><button class="status-btn" data-action="toggle-todo" data-id="${t.id}" ${future ? 'disabled' : ''} aria-label="${done ? 'Zurücksetzen' : 'Erledigt'}"><span class="todo-box ${done ? 'on' : ''}">${done ? '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>' : ''}</span></button></div>
+    <div class="controls"><button class="status-btn" data-action="toggle-todo" data-id="${t.id}" ${future ? 'disabled' : ''} aria-label="${done ? 'Zurücksetzen' : 'Erledigt'}"><span class="todo-box ${done ? 'on' : ''}">${done ? '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>' : ''}</span></button></div>${sortable && !done ? dragHandle('todo') : ''}
   `);
 }
 
@@ -1215,11 +1223,6 @@ function renderSheet() {
         <div class="segmented">${[['check', 'Ja/Nein'], ['count', 'Mit Ziel'], ['limit', 'Limit'], ['choice', 'Auswahl']].map(([k, l]) => `<button class="${dr.kind === k ? 'on' : ''}" data-action="set-kind" data-kind="${k}">${l}</button>`).join('')}</div>
         <div class="hint">${KIND_TEXT[dr.kind]}</div>
       </div>
-      ${dr.kind === 'check' ? `<h3 class="section-title">Wie oft am Tag?</h3>
-      <div class="card"><div class="form-row"><span>Mal pro Tag</span><span class="controls">
-        <button class="step" data-action="times" data-dir="-1" ${dr.times <= 1 ? 'disabled' : ''} aria-label="Weniger">−</button>
-        <span class="value" style="min-width:34px;text-align:center">${dr.times}</span>
-        <button class="step" data-action="times" data-dir="1" ${dr.times >= 9 ? 'disabled' : ''} aria-label="Mehr">+</button></span></div></div>` : ''}
       ${dr.kind === 'choice' ? `<h3 class="section-title">Optionen</h3>
       <div class="card">
         ${dr.options.map((o, i) => `<div class="row"><span class="row-main"><input class="opt-input" data-opt="${i}" value="${esc(o)}" autocomplete="off" aria-label="Option umbenennen"></span>
@@ -1238,9 +1241,11 @@ function renderSheet() {
       ${dr.kind !== 'check' && dr.kind !== 'choice' ? `<h3 class="section-title">${dr.kind === 'count' ? 'Ziel' : 'Limit'}</h3>
       <div class="card">
         <label class="form-row"><span>${dr.kind === 'count' ? 'Ziel pro Tag' : 'Höchstens'}</span><input data-field="target" inputmode="decimal" value="${esc(dr.target)}"></label>
-        ${dr.kind === 'count' ? `<label class="form-row"><span>Pro Tipp</span><input data-field="step" inputmode="decimal" value="${esc(dr.step)}"></label>` : ''}
+        ${dr.kind === 'count' && dr.tap === 'step' ? `<label class="form-row"><span>Pro Tipp</span><input data-field="step" inputmode="decimal" value="${esc(dr.step)}"></label>` : ''}
         <label class="form-row"><span>Einheit</span><input data-field="unit" value="${esc(dr.unit)}" placeholder="z.B. L oder min"></label>
       </div>` : ''}
+      ${dr.kind === 'count' || dr.kind === 'limit' ? `<h3 class="section-title">Abhaken</h3>
+      <div class="card"><div class="segmented">${(dr.kind === 'count' ? [['whole', 'Ganzes Ziel'], ['step', 'In Schritten']] : [['whole', 'Nur abhaken'], ['step', 'Wert eintragen']]).map(([k, l]) => `<button class="${dr.tap === k ? 'on' : ''}" data-action="set-tap" data-tap="${k}">${l}</button>`).join('')}</div></div>` : ''}
       <h3 class="section-title">Wie oft?</h3>
       <div class="card">${freqPicker(dr, '')}</div>
       <h3 class="section-title">Symbol</h3>
@@ -1405,7 +1410,7 @@ function habitDraft(h, template) {
     freq: h && isWeekly(h) ? 'week' : h && h.weekdays.length < 7 ? 'days' : 'daily',
     perWeek: h && isWeekly(h) ? h.perWeek : 3,
     catchUp: h ? catchesUp(h) : false,
-    times: src.kind === 'check' && src.times > 1 ? src.times : 1,
+    tap: src.tap === 'step' ? 'step' : 'whole',
     options: [...(src.options || [])], optOrig: [...(src.options || [])], multi: !!src.multi, minPick: src.minPick || 1,
   };
 }
@@ -1421,7 +1426,7 @@ function saveHabit() {
   if (dr.kind !== 'check' && !(target > 0)) return fail('Bitte gib einen Zielwert größer als 0 ein.');
   if (dr.kind === 'count' && !(step > 0)) return fail('Bitte gib eine Schrittweite größer als 0 ein.');
   if (dr.freq === 'days' && !dr.weekdays.length) return fail('Wähle mindestens einen Wochentag.');
-  const values = { name, icon: dr.icon, kind: dr.kind, target, step, unit: (dr.unit || '').trim(), ...freqValues(dr), catchUp: dr.catchUp, times: dr.kind === 'check' ? dr.times || 1 : 1 };
+  const values = { name, icon: dr.icon, kind: dr.kind, target, step, unit: (dr.unit || '').trim(), ...freqValues(dr), catchUp: dr.catchUp, times: 1, tap: dr.kind === 'count' || dr.kind === 'limit' ? dr.tap : 'whole' };
   if (dr.kind === 'choice') {
     // Umbenannte Optionen: auch im Verlauf umbenennen, damit „zuletzt“ und die Statistik stimmen
     const ren = {};
@@ -1699,7 +1704,7 @@ const actions = {
 
   'undo-habit'(el) {
     const h = habitById(el.dataset.id), k = logKey(h, ui.day), prev = state.logs[k];
-    if (h.kind === 'limit' && state.habitMode === 'steps') return openSheet({ type: 'limit-entry', id: h.id }, null, '#limit-value');
+    if (h.kind === 'limit' && h.tap === 'step') return openSheet({ type: 'limit-entry', id: h.id }, null, '#limit-value');
     if (h.kind === 'limit') state.logs[k] = LIMIT_OVER; else setValue(h, ui.day, 0);
     persist();
     toast(h.kind === 'limit' ? `„${h.name}“ überschritten` : `„${h.name}“ wieder offen`, () => { if (prev === undefined) delete state.logs[k]; else state.logs[k] = prev; });
@@ -1817,7 +1822,7 @@ const actions = {
   },
   'pick-clear'() { savePicks([]); },
   'opt-del'(el) { ui.draft.options.splice(Number(el.dataset.i), 1); ui.draft.optOrig.splice(Number(el.dataset.i), 1); ui.draft.minPick = Math.max(1, Math.min(ui.draft.minPick, ui.draft.options.length)); render(); },
-  times(el) { const dr = ui.draft; dr.times = Math.max(1, Math.min(9, (dr.times || 1) + Number(el.dataset.dir))); render(); },
+  'set-tap'(el) { ui.draft.tap = el.dataset.tap; render(); },
   'min-pick'(el) { const dr = ui.draft; dr.minPick = Math.max(1, Math.min(Math.max(1, dr.options.length), dr.minPick + Number(el.dataset.dir))); render(); },
   'draft-toggle'(el) { ui.draft[el.dataset.key] = !ui.draft[el.dataset.key]; render(); },
   'set-icon'(el) { ui.draft.icon = el.dataset.icon; render(); },
@@ -1890,7 +1895,6 @@ const actions = {
     commit();
   },
   'open-settings'() { openSheet({ type: 'settings' }); },
-  'habit-mode'(el) { state.habitMode = el.dataset.mode; commit(); },
   routines(el) { ui.routines = el.dataset.seg; render(); },
   'open-q-catalog'() { openSheet({ type: 'q-catalog' }); },
   'question-pick'(el) {
@@ -1950,7 +1954,7 @@ function closeOpenSwipe() {
 let drag = null;
 function dragStart(handle, y) {
   const item = handle.closest('.swipe');
-  const items = [...item.parentElement.querySelectorAll(':scope > .swipe')];
+  const items = [...item.parentElement.querySelectorAll(':scope > .swipe')].filter((el) => el.querySelector('.drag-handle'));
   drag = { kind: handle.dataset.drag, item, items, from: items.indexOf(item), to: items.indexOf(item), y0: y, h: item.offsetHeight };
   item.classList.add('dragging');
 }
@@ -1974,6 +1978,7 @@ function dragEnd() {
   const ids = items.map((el) => el.dataset.id);
   const [moved] = ids.splice(from, 1); ids.splice(to, 0, moved);
   if (kind === 'habit') ids.forEach((id, n) => { const h = habitById(id); if (h) h.order = n; });
+  else if (kind === 'todo') { const base = Math.min(...ids.map((id) => todoById(id).order)); ids.forEach((id, n) => { todoById(id).order = base + n; }); }
   else state.checkinQuestions.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
   commit();
 }
