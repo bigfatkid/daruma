@@ -376,6 +376,17 @@ function pickStats(h, days) {
 // x-mal pro Woche: steht jeden Tag bei den Habits, bis das Wochenziel erreicht ist
 // Seit v58: bleibt auch nach erreichtem Ziel stehen (blass, am Ende), damit Extra-Einheiten gehen
 const weeklyShows = (h, d) => isWeekly(h) && h.createdAt <= d;
+// Wochen-Habit muss an Tag d gemacht werden, sonst ist das Wochenziel nicht mehr zu schaffen (Matti, 25.11.)
+function weeklyMust(h, d) {
+  if (!isWeekly(h) || h.createdAt > d || isDone(h, d)) return false;
+  const today = todayKey();
+  let possible = 0;
+  for (let i = 0, k = weekStart(d); i < 7; i++, k = addDays(k, 1)) {
+    if (k === d || k < h.createdAt) continue;
+    if (isDone(h, k) || k > today) possible++;
+  }
+  return possible < h.perWeek;
+}
 function goalMet(h, d) {
   if (!isWeekly(h) || isDone(h, d)) return false;
   let n = 0;
@@ -902,8 +913,8 @@ function renderToday() {
     .filter((t) => todoAppears(t, d, today))
     .sort((a, b) => (!!a.completedAt - !!b.completedAt) || byOrder(a, b));
   // Balken: Habits und To-Dos des Tages. Zweites Auge: nur Habits (Matti, 25.11.).
-  // Wochen-Habits blockieren das Auge nicht: sie zählen nur an Tagen, an denen sie erledigt wurden.
-  const counted = habits.filter((h) => !isWeekly(h) || isDone(h, d));
+  // Wochen-Habits blockieren das Auge nur, wenn das Wochenziel ohne heute nicht mehr zu schaffen ist (weeklyMust).
+  const counted = habits.filter((h) => !isWeekly(h) || isDone(h, d) || weeklyMust(h, d));
   // Übertragene To-Dos („seit …“) stehen in der Liste, blockieren das Auge aber nicht (Review, Matti)
   const eyeTodos = todos.filter((t) => !(d === today && carriedOver(t, today)));
   const done = counted.filter((h) => isDone(h, d)).length + eyeTodos.filter((t) => t.completedAt).length;
@@ -977,7 +988,7 @@ function dayHasItems(k, today) {
 }
 // Zweites Auge an Tag k: alle fälligen Habits erledigt (Matti, 25.11.: nur Habits)
 function dayEye(k) {
-  const hs = state.habits.filter((h) => isActive(h, k) || (isWeekly(h) && h.createdAt <= k && isDone(h, k)));
+  const hs = state.habits.filter((h) => isActive(h, k) || (isWeekly(h) && h.createdAt <= k && (isDone(h, k) || weeklyMust(h, k))));
   return hs.length > 0 && hs.every((h) => isDone(h, k));
 }
 function dayProgress(k, today) {
