@@ -605,7 +605,7 @@ function renderMonthSheet() {
   for (let n = 1; n <= days; n++) {
     const k = `${m}-${String(n).padStart(2, '0')}`;
     const fut = k > today, p = fut ? 0 : dayProgress(k, today);
-    cells.push(`<button class="m-day ${k === ui.day ? 'selected' : ''} ${k === today ? 'today' : ''} ${fut ? 'future' : ''} ${p >= 1 ? 'full' : ''}" data-action="month-pick" data-day="${k}"><span>${n}</span>${fut ? '<i></i>' : p >= 1 ? darumaSVG(true) : weekRing(p, k === ui.day, false)}</button>`);
+    cells.push(`<button class="m-day ${k === ui.day ? 'selected' : ''} ${k === today ? 'today' : ''} ${fut ? 'future' : ''} ${!fut && dayEye(k) ? 'full' : ''}" data-action="month-pick" data-day="${k}"><span>${n}</span>${fut ? '<i></i>' : dayEye(k) ? darumaSVG(true) : weekRing(p, k === ui.day, false)}</button>`);
   }
   const title = new Date(y, mo - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
   const body = `<div class="m-nav"><button class="link" data-action="month-shift" data-n="-1" aria-label="Voriger Monat">${ICON.left}</button><strong>${esc(title)}</strong><button class="link" data-action="month-shift" data-n="1" aria-label="Nächster Monat">${ICON.right}</button></div>
@@ -777,7 +777,7 @@ function renderOnboarding() {
   if (ob.step === 0) {
     body = `<div class="ob-hero"><div class="daruma big-daruma wobble" data-action="poke">${darumaSVG(false)}</div>
       <h1>Kleine Schritte, jeden Tag.</h1>
-      <p>Daruma behält für dich den Überblick über Habits, To-Dos und Projekte. Schaffst du alles für heute, öffnet er sein zweites Auge.</p></div>
+      <p>Daruma behält für dich den Überblick über Habits, To-Dos und Projekte. Schaffst du alle Habits eines Tages, bekommt Daruma sein zweites Auge.</p></div>
       <h3 class="section-title">Wie heißt du?</h3>
       <input class="field" id="ob-name" value="${esc(ob.name)}" placeholder="Dein Vorname (optional)" autocomplete="given-name" enterkeyhint="next">`;
     button = 'Los geht’s';
@@ -813,7 +813,7 @@ function renderOnboarding() {
   } else {
     body = `<div class="ob-hero ob-done"><div class="daruma done-daruma wobble" data-action="poke">${darumaSVG(true, true)}</div>
       <h1>Alles bereit${ob.name ? `, ${esc(ob.name)}` : ''}!</h1>
-      <p>Schaffst du an einem Tag alle Habits und To-Dos, bekommt Daruma sein zweites Auge. Gleich zeige ich dir kurz die App.</p></div>`;
+      <p>Schaffst du alle Habits eines Tages, bekommt Daruma sein zweites Auge. Gleich zeige ich dir kurz die App.</p></div>`;
     button = 'Los geht’s';
   }
   return `<main class="screen ob">
@@ -890,7 +890,7 @@ function openText(h, t, past, total) {
   const parts = [h ? `${h} ${h === 1 ? 'Habit' : 'Habits'}` : '', t ? `${t} ${t === 1 ? 'To-Do' : 'To-Dos'}` : ''].filter(Boolean).join(' und ');
   if (past) return `Hier fehlte${h + t === 1 ? '' : 'n'} noch ${parts}.`;
   const firstWeek = state.firstUse && state.firstUse > addDays(todayKey(), -7);
-  return firstWeek ? `Noch ${parts}, dann malt Daruma das zweite Auge aus.` : `Noch ${parts}.`;
+  return firstWeek && h ? `Noch ${parts}, dann malt Daruma das zweite Auge aus.` : `Noch ${parts}.`;
 }
 
 function renderToday() {
@@ -901,14 +901,15 @@ function renderToday() {
   const todos = state.todos
     .filter((t) => todoAppears(t, d, today))
     .sort((a, b) => (!!a.completedAt - !!b.completedAt) || byOrder(a, b));
-  // Für das zweite Auge zählen Habits und To-Dos des Tages (Mattis Wunsch).
+  // Balken: Habits und To-Dos des Tages. Zweites Auge: nur Habits (Matti, 25.11.).
   // Wochen-Habits blockieren das Auge nicht: sie zählen nur an Tagen, an denen sie erledigt wurden.
   const counted = habits.filter((h) => !isWeekly(h) || isDone(h, d));
   // Übertragene To-Dos („seit …“) stehen in der Liste, blockieren das Auge aber nicht (Review, Matti)
   const eyeTodos = todos.filter((t) => !(d === today && carriedOver(t, today)));
   const done = counted.filter((h) => isDone(h, d)).length + eyeTodos.filter((t) => t.completedAt).length;
   const total = counted.length + eyeTodos.length;
-  const allDone = total > 0 && done === total;
+  // Zweites Auge: nur Habits (Matti, 25.11.). To-Dos zählen für den Balken.
+  const allDone = counted.length > 0 && counted.every((h) => isDone(h, d));
 
   // Wackeln, wenn gerade alles erledigt wurde
   const popEye = allDone && ui.lastAllDone[d] === false;
@@ -973,6 +974,11 @@ function renderToday() {
 function dayHasItems(k, today) {
   return state.habits.some((h) => isActive(h, k) || (isWeekly(h) && h.createdAt <= k && isDone(h, k)))
     || state.todos.some((t) => todoAppears(t, k, today) && !(k === today && carriedOver(t, today)));
+}
+// Zweites Auge an Tag k: alle fälligen Habits erledigt (Matti, 25.11.: nur Habits)
+function dayEye(k) {
+  const hs = state.habits.filter((h) => isActive(h, k) || (isWeekly(h) && h.createdAt <= k && isDone(h, k)));
+  return hs.length > 0 && hs.every((h) => isDone(h, k));
 }
 function dayProgress(k, today) {
   const active = state.habits.filter((h) => isActive(h, k) || (isWeekly(h) && h.createdAt <= k && isDone(h, k)));
