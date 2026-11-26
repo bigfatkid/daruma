@@ -536,8 +536,12 @@ function ciFolded(d) {
 const dragHandle = (kind) => `<span class="drag-mark" data-drag="${kind}" hidden></span>`;
 
 // Zeile, die sich nach links wischen lässt und dann einen Mülleimer zeigt
-function swipeRow(kind, id, inner) {
-  return `<div class="swipe" data-swipe="${kind}" data-id="${id}"><button class="swipe-del" data-action="swipe-del" data-kind="${kind}" data-id="${id}" aria-label="Löschen" tabindex="-1">${pic('🗑️')}</button><div class="row swipe-row">${inner}</div></div>`;
+function swipeRow(kind, id, inner, back = null) {
+  // back: anderer Knopf hinter der Zeile, z. B. Projekt-Aufgabe nur vom Tag nehmen statt löschen
+  const btn = back
+    ? `<button class="swipe-del ${back.cls}" data-action="swipe-del" data-kind="${kind}" data-id="${id}" aria-label="${back.label}" tabindex="-1">${back.html}</button>`
+    : `<button class="swipe-del" data-action="swipe-del" data-kind="${kind}" data-id="${id}" aria-label="Löschen" tabindex="-1">${pic('🗑️')}</button>`;
+  return `<div class="swipe" data-swipe="${kind}" data-id="${id}">${btn}<div class="row swipe-row">${inner}</div></div>`;
 }
 
 // Abschnitt Check-in im Reiter Routinen
@@ -1141,7 +1145,7 @@ function todoRow(t, today, future, sortable = false) {
       <span class="name-wrap"><span class="name ${done ? 'struck' : ''}">${esc(t.title)}</span>${tag && !done ? `<span class="tag">${esc(tag)}</span>` : ''}</span>
     </button>
     <div class="controls"><button class="status-btn" data-action="toggle-todo" data-id="${t.id}" ${future ? 'disabled' : ''} aria-label="${done ? 'Zurücksetzen' : 'Erledigt'}"><span class="todo-box ${done ? 'on' : ''}">${done ? '<svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>' : ''}</span></button></div>${sortable && !done ? dragHandle('todo') : ''}
-  `);
+  `, list ? { cls: 'swipe-unplan', label: 'Zurück ins Projekt', html: `${pic('📁')}<span>Ins Projekt</span>` } : null);
 }
 
 function renderPool() {
@@ -1435,7 +1439,9 @@ function renderSheet() {
       </div>
       `}
       ${dr.error ? `<p class="error">${esc(dr.error)}</p>` : ''}
-      ${isNew ? '' : `<div class="card" style="margin-top:28px">
+      ${isNew ? '' : dr.isPool && ui.tab !== 'pool' ? `<div class="card" style="margin-top:28px">
+        <button class="btn-plain" style="color:var(--accent);font-size:17px" data-action="unplan-todo">Vom Tag nehmen</button>
+      </div><p class="hint" style="text-align:center">Bleibt im Projekt. Löschen geht im Reiter Projekte.</p>` : `<div class="card" style="margin-top:28px">
         <button class="btn-danger" data-action="delete-todo">${dr.confirmDelete ? 'Wirklich löschen? Nochmal tippen' : 'Löschen'}</button>
       </div>`}`;
     return sheetShell(isNew ? 'Neues To-Do' : (dr.isPool ? 'Aufgabe bearbeiten' : 'To-Do bearbeiten'), cancelBtn,
@@ -1930,6 +1936,14 @@ const actions = {
   },
   'repeat-wd'(el) { const dr = ui.draft, n = Number(el.dataset.wd); dr.wd = dr.wd.includes(n) ? dr.wd.filter((x) => x !== n) : [...dr.wd, n]; render(); },
   'save-todo'() { saveTodo(); },
+  'unplan-todo'() {
+    const t = todoById(ui.draft.id);
+    ui.sheet = null; ui.draft = null;
+    if (!t) return commit();
+    const day = t.plannedDay, list = listById(t.listId);
+    t.plannedDay = null; persist();
+    toast(list ? `Zurück in „${list.name}“` : 'Zurück im Projekt', () => { const x = todoById(t.id); if (x) x.plannedDay = day; });
+  },
   'delete-todo'() {
     if (!ui.draft.confirmDelete) { ui.draft.confirmDelete = true; return render(); }
     state.todos = state.todos.filter((t) => t.id !== ui.draft.id);
@@ -2049,7 +2063,12 @@ const actions = {
     const { kind, id } = el.dataset;
     openSwipe = null;
     let label = 'Gelöscht', restore = null;
-    if (kind === 'todo') {
+    if (kind === 'todo' && todoById(id)?.listId) {
+      // Projekt-Aufgaben auf Heute werden nur vom Tag genommen, gelöscht wird nur im Projekt
+      const t = todoById(id), day = t.plannedDay, list = listById(t.listId);
+      t.plannedDay = null; label = list ? `Zurück in „${list.name}“` : 'Zurück im Projekt';
+      restore = () => { const x = todoById(id); if (x) x.plannedDay = day; };
+    } else if (kind === 'todo') {
       const t = todoById(id);
       state.todos = state.todos.filter((x) => x.id !== id); label = 'To-Do gelöscht';
       restore = () => { if (t) state.todos.push(t); };

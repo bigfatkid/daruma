@@ -731,6 +731,7 @@ textarea.field { font: inherit; font-size: 17px; resize: vertical; line-height: 
 .day-grid input[type=date] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; }
 
 /* Schritt zurück per Wischen (Ziel-Habits in Schritten) */
+.swipe-unplan { background: var(--secondary); flex-direction: column; gap: 3px; font-size: 11px; font-weight: 600; }
 .swipe-minus { background: var(--secondary); font-weight: 700; font-size: 15px; }
 
 /* Langes Drücken zum Sortieren: kein Text-Markieren, kein iOS-Menü */
