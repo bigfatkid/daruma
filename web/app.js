@@ -535,6 +535,9 @@ function ciFolded(d) {
 // Unsichtbare Markierung: Zeile lässt sich per langem Drücken verschieben (Matti: kein Griff)
 const dragHandle = (kind) => `<span class="drag-mark" data-drag="${kind}" hidden></span>`;
 
+// Zeile ohne Wischen, die sich per langem Drücken verschieben lässt (Projekte, Aufgaben, Unteraufgaben)
+const sortRow = (kind, id, inner, rowAttrs = '') => `<div class="swipe sort-item" data-id="${id}"><div class="row"${rowAttrs}>${inner}${dragHandle(kind)}</div></div>`;
+
 // Zeile, die sich nach links wischen lässt und dann einen Mülleimer zeigt
 function swipeRow(kind, id, inner, back = null) {
   // back: anderer Knopf hinter der Zeile, z. B. Projekt-Aufgabe nur vom Tag nehmen statt löschen
@@ -1175,10 +1178,11 @@ function renderPool() {
     <div class="card">${lists.map((l) => {
       const all = state.todos.filter((t) => t.listId === l.id);
       const n = all.length ? `${all.filter((t) => t.completedAt).length} von ${all.length}` : '';
-      return `<div class="row"><button class="row-main" data-action="open-list" data-id="${l.id}">
+      const inner = `<button class="row-main" data-action="open-list" data-id="${l.id}">
         <span class="emoji">${pic(l.icon)}</span><span class="name" style="flex:1">${esc(l.name)}</span>
         <span class="count">${n}</span><svg class="chevron" viewBox="0 0 8 14">${ICON.right.replace(/<\/?svg[^>]*>/g, '')}</svg>
-      </button></div>`;
+      </button>`;
+      return lists.length > 1 ? sortRow('list', l.id, inner) : `<div class="row">${inner}</div>`;
     }).join('')}</div>
     <div class="card" style="margin-top:20px"><div class="row"><button class="row-main" data-action="new-list"><span class="emoji">${pic('➕')}</span><span class="name" style="color:var(--accent)">Projekt hinzufügen</span></button></div></div>`;
 }
@@ -1204,13 +1208,13 @@ function renderPoolList(list, today) {
     <div class="card">
       ${open.map((t) => {
         const planned = !!t.plannedDay;
-        return `<div class="row">
+        const inner = `
           <button class="status-btn" data-action="pool-done" data-id="${t.id}" aria-label="Erledigt"><span class="todo-box"></span></button>
           <button class="row-main" data-action="edit-todo" data-id="${t.id}"><span class="name-wrap"><span class="name">${esc(t.title)}</span>${subsText(t) ? `<span class="tag">${subsText(t)}</span>` : ''}</span></button>
           <div class="controls">${planned
             ? `<button class="pill filled" data-action="plan-open" data-id="${t.id}">${planLabel(t.plannedDay < today ? today : t.plannedDay, today)}</button>`
-            : `<button class="pill" data-action="plan-open" data-id="${t.id}">Planen</button>`}</div>
-        </div>`;
+            : `<button class="pill" data-action="plan-open" data-id="${t.id}">Planen</button>`}</div>`;
+        return open.length > 1 ? sortRow('pool', t.id, inner) : `<div class="row">${inner}</div>`;
       }).join('')}
       <form class="row add-row" data-form="add-pool-item">
         <span class="plus">+</span>
@@ -1429,11 +1433,13 @@ function renderSheet() {
       </div>`}
       ${!dr.isPool ? '' : `<h3 class="section-title">Unteraufgaben</h3>
       <div class="card">
-        ${dr.subs.map((x, i) => `<div class="row">
+        ${dr.subs.map((x, i) => {
+          const inner = `
           <button class="status-btn" data-action="sub-toggle" data-i="${i}" aria-label="${x.done ? 'Zurücksetzen' : 'Erledigt'}">${statusCircle(x.done ? 'done' : 'open')}</button>
           <span class="row-main"><span class="name ${x.done ? 'struck' : ''}">${esc(x.title)}</span></span>
-          <div class="controls"><button class="small-link" data-action="sub-del" data-i="${i}" aria-label="Entfernen">✕</button></div>
-        </div>`).join('')}
+          <div class="controls"><button class="small-link" data-action="sub-del" data-i="${i}" aria-label="Entfernen">✕</button></div>`;
+          return dr.subs.length > 1 ? sortRow('sub', x.id, inner) : `<div class="row">${inner}</div>`;
+        }).join('')}
         <form class="row add-row" data-form="add-sub"><span class="plus">+</span><input id="sub-new" placeholder="Unteraufgabe eintippen" autocomplete="off" enterkeyhint="done">
           <button class="pill add-btn" type="submit">Hinzufügen</button></form>
       </div>
@@ -2206,7 +2212,7 @@ function closeOpenSwipe() {
   if (openSwipe && openSwipe.isConnected) setSwipeX(openSwipe, 0, true);
   openSwipe = null;
 }
-// Sortieren: Zeile lange drücken, dann ziehen (To-Dos auf Heute, Habits und Fragen in Routinen)
+// Sortieren: Zeile lange drücken, dann ziehen (To-Dos auf Heute, Habits und Fragen in Routinen, Projekte, Aufgaben und Unteraufgaben)
 let drag = null;
 function dragStart(handle, y) {
   const item = handle.closest('.swipe');
@@ -2234,7 +2240,9 @@ function dragEnd() {
   const ids = items.map((el) => el.dataset.id);
   const [moved] = ids.splice(from, 1); ids.splice(to, 0, moved);
   if (kind === 'habit') ids.forEach((id, n) => { const h = habitById(id); if (h) h.order = n; });
-  else if (kind === 'todo') { const base = Math.min(...ids.map((id) => todoById(id).order)); ids.forEach((id, n) => { todoById(id).order = base + n; }); }
+  else if (kind === 'list') ids.forEach((id, n) => { const l = listById(id); if (l) l.order = n; });
+  else if (kind === 'sub') { const subs = ui.draft.subs; subs.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)); syncSubs(); return; }
+  else if (kind === 'todo' || kind === 'pool') { const base = Math.min(...ids.map((id) => todoById(id).order)); ids.forEach((id, n) => { todoById(id).order = base + n; }); }
   else state.checkinQuestions.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
   commit();
 }
